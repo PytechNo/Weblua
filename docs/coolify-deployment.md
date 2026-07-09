@@ -36,7 +36,8 @@ recommended choice for this repo because it pins a working Node line.
 ### Option A — Dockerfile build pack (recommended)
 
 Use the checked-in `Dockerfile` in the repo root. It builds the Vite app with
-`node:22-slim`, then serves `dist/` with nginx.
+`node:22-slim`, then serves `dist/` with nginx. The included nginx config falls back
+to `index.html` for app routes like `/playground`, `/p/:id`, and `/embed/:id`.
 
 In Coolify:
 
@@ -66,9 +67,9 @@ resolve to a patch version older than Vite/Rolldown requires.
 type-checks the app **and** the Cloudflare Worker types before building. That's fine;
 type-checking the worker doesn't require deploying it.
 
-> No SPA-fallback rewrite (`try_files ... /index.html`) is required — Weblua doesn't use
-> path-based client routing (React Router etc.), only URL-hash sharing, so nginx's
-> default static handling is enough.
+> If you use a custom static server instead of the checked-in Dockerfile, make sure app
+> routes fall back to `index.html`; otherwise direct visits to `/playground`, `/p/:id`,
+> or `/embed/:id` will 404 before React loads.
 
 ## 3. Environment variables (build-time!)
 
