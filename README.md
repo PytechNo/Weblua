@@ -1,6 +1,6 @@
 # Weblua
 
-Weblua is a client-side Lua playground for Lua 5.4 and Luau. It runs snippets in a Web Worker, captures output, and shares snippets entirely through the URL — no backend required.
+Weblua is a client-side Lua playground for Lua 5.1, 5.2, 5.3, 5.4, and Luau. It runs multi-file projects in a Web Worker, captures output, and keeps sharing and persistence entirely in the browser — no backend required.
 
 ## Run Locally
 
@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open the local Vite URL and press Ctrl/Cmd-Enter to run the current snippet.
+Open the local Vite URL and press Ctrl/Cmd-Enter to run the current project.
 
 ## Scripts
 
@@ -17,14 +17,22 @@ Open the local Vite URL and press Ctrl/Cmd-Enter to run the current snippet.
 - `npm run build` type-checks the app, then builds the frontend.
 - `npm run test` runs utility tests.
 
-## Sharing
+## Projects, sharing, and persistence
 
-Sharing is fully client-side and needs no backend. The snippet's code is compressed with
-the browser-native `CompressionStream` (raw DEFLATE) and base64url-encoded into the link
-fragment, e.g. `/playground#c=1L...`. Because everything lives in the URL, links work on
-any static host — open one and the playground restores the code and runtime. Older
-`#share=` links (lz-string) are still decoded for backward compatibility. The same
-mechanism backs the `/embed#c=...` iframe embeds.
+Projects can contain multiple Lua or Luau files and select an entry file. Standard Lua
+projects use `require("lib.module")` against an in-worker virtual filesystem; Luau projects
+use an equivalent browser-safe module loader. The Input drawer supplies preset stdin for
+`io.read()` in Lua and `read()` in Luau.
+
+Sharing is fully client-side. A source-only project map is compressed with browser-native
+`CompressionStream` (raw DEFLATE) and base64url-encoded into the link fragment, e.g.
+`/playground#c=2...`. Links restore files, entry point, and runtime on any static host.
+Input, output, and local project metadata are deliberately excluded. Older `#c=1...` and
+`#share=` links still decode as one-file projects. The same mechanism backs `/embed`.
+
+The browser keeps a recovery draft and named project library in IndexedDB. Exports use
+source-only `.weblua.json` files for offline transfer when a project is too large for a
+reliable URL fragment.
 
 ## Upstream Notes
 

@@ -1,4 +1,4 @@
-import type { RunRequest, RunResult, RuntimeFlavor } from "./types";
+import type { ProjectPayload, RunRequest, RunResult, RuntimeFlavor } from "./types";
 
 const RUN_TIMEOUT_MS = 5000;
 
@@ -7,7 +7,36 @@ export function runSnippet(
   flavor: RuntimeFlavor,
   timeoutMs = RUN_TIMEOUT_MS
 ): Promise<RunResult> {
-  const id = crypto.randomUUID();
+  return runRequest({
+    id: crypto.randomUUID(),
+    code,
+    flavor
+  }, timeoutMs);
+}
+
+/**
+ * Run a complete in-browser project. `stdin` is copied into the message so a
+ * run always observes the exact input that existed when the Run button was
+ * pressed, even if the user edits the drawer while the worker is starting.
+ */
+export function runProject(
+  project: ProjectPayload,
+  stdin = "",
+  timeoutMs = RUN_TIMEOUT_MS
+): Promise<RunResult> {
+  return runRequest(
+    {
+      id: crypto.randomUUID(),
+      project,
+      stdin
+    },
+    timeoutMs
+  );
+}
+
+function runRequest(request: RunRequest, timeoutMs: number): Promise<RunResult> {
+  const id = request.id;
+  const flavor = "project" in request ? request.project.flavor : request.flavor;
   const worker = new Worker(new URL("../workers/runWorker.ts", import.meta.url), {
     type: "module"
   });
@@ -58,7 +87,6 @@ export function runSnippet(
       });
     };
 
-    const request: RunRequest = { id, code, flavor };
     worker.postMessage(request);
   });
 }

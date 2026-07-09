@@ -1,4 +1,4 @@
-import type { CheckResult, RunRequest, RuntimeFlavor } from "./types";
+import type { CheckResult, ProjectPayload, RunRequest, RuntimeFlavor } from "./types";
 
 const CHECK_TIMEOUT_MS = 4000;
 
@@ -48,7 +48,41 @@ export function checkSnippet(
   flavor: RuntimeFlavor,
   timeoutMs = CHECK_TIMEOUT_MS
 ): Promise<CheckResult | null> {
-  const id = crypto.randomUUID();
+  return checkRequest(
+    {
+      id: crypto.randomUUID(),
+      code,
+      flavor,
+      mode: "check"
+    },
+    timeoutMs
+  );
+}
+
+/**
+ * Compile every source file in a project without executing it. `activeFile`
+ * travels with the request so consumers can associate returned file-aware
+ * diagnostics with the currently visible editor while still showing a full
+ * result for an explicit Check action.
+ */
+export function checkProject(
+  project: ProjectPayload,
+  activeFile?: string,
+  timeoutMs = CHECK_TIMEOUT_MS
+): Promise<CheckResult | null> {
+  return checkRequest(
+    {
+      id: crypto.randomUUID(),
+      project,
+      activeFile,
+      mode: "check"
+    },
+    timeoutMs
+  );
+}
+
+function checkRequest(request: RunRequest, timeoutMs: number): Promise<CheckResult | null> {
+  const id = request.id;
 
   return new Promise<CheckResult | null>((resolve) => {
     const timeout = window.setTimeout(() => {
@@ -64,7 +98,6 @@ export function checkSnippet(
       resolve(result);
     });
 
-    const request: RunRequest = { id, code, flavor, mode: "check" };
     getWorker().postMessage(request);
   });
 }

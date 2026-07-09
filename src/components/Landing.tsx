@@ -186,13 +186,13 @@ const FEATURES = [
   },
   {
     icon: Braces,
-    title: "Lua 5.4 and Luau",
-    body: "Switch between vanilla Lua 5.4 and Roblox's Luau — type annotations, generics, and all — with a single dropdown."
+    title: "Lua 5.1–5.4 and Luau",
+    body: "Choose Lua 5.1 through 5.4 or Roblox's Luau — type annotations, generics, and all — with a single dropdown."
   },
   {
     icon: Link,
     title: "Share with a link",
-    body: "Every snippet compresses into a URL. Paste it in a code review, a Discord thread, or a bug report and it just runs."
+    body: "Every source project compresses into a URL. Paste it in a code review, a Discord thread, or a bug report and it just runs."
   },
   {
     icon: Code2,
@@ -202,7 +202,7 @@ const FEATURES = [
   {
     icon: Lock,
     title: "Private by design",
-    body: "Your code executes entirely in your browser's sandbox, and nothing is ever uploaded — shared links carry the snippet compressed inside the URL itself."
+    body: "Your code executes entirely in your browser's sandbox, and nothing is ever uploaded — shared links carry source files inside the URL itself."
   },
   {
     icon: Keyboard,
@@ -257,11 +257,11 @@ const FAQS = [
   },
   {
     q: "Does my code get sent to a server?",
-    a: "No. Lua runs inside a WebAssembly sandbox in your browser tab, and nothing is uploaded. Even sharing keeps your code local — the snippet is compressed straight into the link's URL fragment, which browsers never send to a server."
+    a: "No. Lua runs inside a WebAssembly sandbox in your browser tab, and nothing is uploaded. Even sharing keeps your code local — the source project is compressed straight into the link's URL fragment, which browsers never send to a server."
   },
   {
-    q: "What's the difference between Lua 5.4 and Luau?",
-    a: "Lua 5.4 is the latest official Lua release. Luau is Roblox's fork with gradual typing, generics, and performance-focused extensions. Weblua ships both runtimes so you can compare behavior side by side."
+    q: "Which Lua versions does Weblua support?",
+    a: "Weblua runs official Lua 5.1, 5.2, 5.3, and 5.4, plus Luau — Roblox's typed Lua-derived language. Select one runtime per run to check the behavior you need."
   },
   {
     q: "Can I use Weblua offline?",
@@ -269,7 +269,7 @@ const FAQS = [
   },
   {
     q: "How do embeds work?",
-    a: "Every snippet can be turned into an iframe embed. The embedded playground is fully interactive: readers can edit the code and re-run it without leaving your page."
+    a: "Every source project can be turned into an iframe embed. The embedded playground is fully interactive: readers can edit files and re-run it without leaving your page."
   },
   {
     q: "Can I contribute?",
@@ -289,8 +289,8 @@ const PRICING = [
     soon: false,
     features: [
       "Unlimited runs, client-side",
-      "Lua 5.4 and Luau runtimes",
-      "Shareable snippet links",
+      "Lua 5.1–5.4 and Luau runtimes",
+      "Shareable multi-file projects",
       "iframe embeds",
       "Curated example library",
       "Open source, MIT licensed"
@@ -446,13 +446,13 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <div className="hero-copy">
               <span className="badge reveal">
                 <Sparkles size={13} />
-                Now running Lua 5.4 <em>and</em> Luau
+                Now running Lua 5.1–5.4 <em>and</em> Luau
               </span>
               <h1 id="hero-title" className="reveal" style={{ transitionDelay: "60ms" }}>
                 The Lua playground that lives in <span className="grad-text">your browser</span>
               </h1>
               <p className="hero-sub reveal" style={{ transitionDelay: "120ms" }}>
-                Write, run, and share Lua 5.4 and Luau snippets in milliseconds — powered by
+                Write, run, and share Lua projects and Luau snippets in milliseconds — powered by
                 WebAssembly. No installs, no servers, no sign-up. Just code.
               </p>
               <div className="hero-ctas reveal" style={{ transitionDelay: "180ms" }}>
@@ -493,7 +493,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         <section className="proof" aria-label="Built with trusted technology">
           <p className="proof-label reveal">Built on a stack Lua developers already trust</p>
           <ul className="proof-logos reveal" style={{ transitionDelay: "80ms" }}>
-            <li>Lua 5.4</li>
+            <li>Lua 5.1–5.4</li>
             <li>Luau</li>
             <li>WebAssembly</li>
             <li>CodeMirror</li>
@@ -506,7 +506,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             </div>
             <div className="stat">
               <dt>Runtimes</dt>
-              <dd>2</dd>
+              <dd>5</dd>
             </div>
             <div className="stat">
               <dt>Client-side execution</dt>
@@ -603,7 +603,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 <div className="showcase-text">
                   <h3>Real runtimes, real output</h3>
                   <p>
-                    This is not a syntax checker. Weblua runs the official Lua 5.4 VM and Luau
+                    This is not a syntax checker. Weblua runs Lua 5.1 through 5.4 and Luau
                     compiled to WebAssembly, so metatables, coroutines, and error semantics behave
                     exactly like they do in production.
                   </p>
@@ -645,7 +645,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             {activeTab === "share" && (
               <div className="showcase-body" role="tabpanel" id="panel-share" aria-labelledby="tab-share">
                 <div className="showcase-text">
-                  <h3>The whole snippet, inside the URL</h3>
+                  <h3>The whole source project, inside the URL</h3>
                   <p>
                     Your code is compressed straight into the link — no database, no backend, no
                     sign-up. One click copies it to your clipboard, ready to paste anywhere.
@@ -873,8 +873,8 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
               <span>Weblua</span>
             </a>
             <p>
-              A fast, client-side Lua and Luau playground. Run Lua online, test Luau snippets, and
-              share small programs straight from the browser.
+              A fast, client-side Lua and Luau playground. Run multi-file projects, test Luau
+              snippets, and share source straight from the browser.
             </p>
           </div>
           <nav className="footer-col" aria-label="Product">
