@@ -202,7 +202,7 @@ const FEATURES = [
   {
     icon: Lock,
     title: "Private by design",
-    body: "Your code executes entirely in your browser's sandbox. Nothing is uploaded unless you explicitly create a short link."
+    body: "Your code executes entirely in your browser's sandbox, and nothing is ever uploaded — shared links carry the snippet compressed inside the URL itself."
   },
   {
     icon: Keyboard,
@@ -222,7 +222,7 @@ const STEPS = [
   },
   {
     title: "Share",
-    body: "Copy a self-contained link, mint a short URL, or grab an iframe embed. Whoever opens it sees exactly what you see."
+    body: "Copy a self-contained link or grab an iframe embed. Whoever opens it sees exactly what you see."
   }
 ] as const;
 
@@ -257,7 +257,7 @@ const FAQS = [
   },
   {
     q: "Does my code get sent to a server?",
-    a: "No. Lua runs inside a WebAssembly sandbox in your browser tab. The only time anything leaves your machine is when you explicitly create a short link, which stores the snippet so others can open it."
+    a: "No. Lua runs inside a WebAssembly sandbox in your browser tab, and nothing is uploaded. Even sharing keeps your code local — the snippet is compressed straight into the link's URL fragment, which browsers never send to a server."
   },
   {
     q: "What's the difference between Lua 5.4 and Luau?",
@@ -497,7 +497,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <li>Luau</li>
             <li>WebAssembly</li>
             <li>CodeMirror</li>
-            <li>Cloudflare</li>
+            <li>React</li>
           </ul>
           <dl className="stats reveal" style={{ transitionDelay: "140ms" }}>
             <div className="stat">
@@ -647,15 +647,15 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 <div className="showcase-text">
                   <h3>The whole snippet, inside the URL</h3>
                   <p>
-                    Your code is compressed straight into the link — no database required. Prefer
-                    something tidy? Mint a short link and it's on your clipboard in one click.
+                    Your code is compressed straight into the link — no database, no backend, no
+                    sign-up. One click copies it to your clipboard, ready to paste anywhere.
                   </p>
                   <ul className="check-list">
                     <li>
                       <Check size={15} /> Links preserve code <em>and</em> runtime choice
                     </li>
                     <li>
-                      <Check size={15} /> Short links for chat, commits, and reviews
+                      <Check size={15} /> One link for chat, commits, and reviews
                     </li>
                     <li>
                       <Check size={15} /> Recipients can edit and re-run immediately
@@ -666,9 +666,9 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                   <div className="mock-terminal mock-share">
                     <span className="mock-chip">
                       <Link size={13} />
-                      weblua.com/p/x7Kf2q
+                      weblua.com/playground#c=1L…
                     </span>
-                    <span className="mock-line mock-ok">✓ Short link copied to clipboard</span>
+                    <span className="mock-line mock-ok">✓ Share link copied to clipboard</span>
                     <span className="mock-divider" />
                     <span className="mock-line tok-comment">-- anyone who opens it sees:</span>
                     <span className="mock-line">

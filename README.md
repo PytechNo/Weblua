@@ -1,6 +1,6 @@
 # Weblua
 
-Weblua is a client-side Lua playground for Lua 5.4 and Luau. It runs snippets in a Web Worker, captures output, supports URL-fragment sharing, and includes a Cloudflare Worker scaffold for short links.
+Weblua is a client-side Lua playground for Lua 5.4 and Luau. It runs snippets in a Web Worker, captures output, and shares snippets entirely through the URL — no backend required.
 
 ## Run Locally
 
@@ -14,14 +14,17 @@ Open the local Vite URL and press Ctrl/Cmd-Enter to run the current snippet.
 ## Scripts
 
 - `npm run dev` starts the Vite dev server.
-- `npm run build` type-checks the app and Cloudflare Worker, then builds the frontend.
+- `npm run build` type-checks the app, then builds the frontend.
 - `npm run test` runs utility tests.
-- `npm run worker:dev` starts the short-link Worker once KV IDs are configured.
-- `npm run worker:deploy` deploys the short-link Worker.
 
-## Short Links
+## Sharing
 
-Fragment links work without a backend. For `/p/:id` short links, create a Cloudflare KV namespace, replace the placeholder IDs in `wrangler.toml`, deploy the Worker, and route `/api/snippets/*` to it. The frontend POSTs snippets to `/api/snippets` and reads `/api/snippets/:id`.
+Sharing is fully client-side and needs no backend. The snippet's code is compressed with
+the browser-native `CompressionStream` (raw DEFLATE) and base64url-encoded into the link
+fragment, e.g. `/playground#c=1L...`. Because everything lives in the URL, links work on
+any static host — open one and the playground restores the code and runtime. Older
+`#share=` links (lz-string) are still decoded for backward compatibility. The same
+mechanism backs the `/embed#c=...` iframe embeds.
 
 ## Upstream Notes
 

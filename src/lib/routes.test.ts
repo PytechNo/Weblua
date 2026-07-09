@@ -10,16 +10,16 @@ describe("app routes", () => {
     expect(getAppRoute("/", "#share=abc").mode).toBe("playground");
   });
 
+  it("keeps deflate share links on the playground", () => {
+    expect(getAppRoute("/", "#c=1Labc").mode).toBe("playground");
+  });
+
   it("serves the playground at /playground", () => {
     expect(getAppRoute("/playground", "").mode).toBe("playground");
   });
 
-  it("resolves snippet routes", () => {
-    expect(getAppRoute("/p/x7Kf2q", "")).toEqual({ mode: "snippet", id: "x7Kf2q" });
-  });
-
-  it("resolves embed routes with and without an id", () => {
-    expect(getAppRoute("/embed/x7Kf2q", "")).toEqual({ mode: "embed", id: "x7Kf2q" });
-    expect(getAppRoute("/embed", "")).toEqual({ mode: "embed", id: undefined });
+  it("resolves embed routes", () => {
+    expect(getAppRoute("/embed", "")).toEqual({ mode: "embed" });
+    expect(getAppRoute("/embed/anything", "")).toEqual({ mode: "embed" });
   });
 });

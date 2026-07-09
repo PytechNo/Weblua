@@ -11,18 +11,16 @@ import {
   Moon,
   Play,
   RotateCcw,
-  Share2,
   Sun,
   Trash2
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GitHubMark, MoonMark } from "./components/Brand";
 import { Landing } from "./components/Landing";
-import { buildShareUrl, makeShareHash, readShareHash } from "./lib/codec";
+import { buildShareUrl, readShareHash } from "./lib/codec";
 import { defaultExample, examples } from "./lib/examples";
 import { runSnippet } from "./lib/runner";
 import { getAppRoute } from "./lib/routes";
-import { fetchSnippet, saveSnippet } from "./lib/snippetApi";
 import { reportRuntimeError, trackEvent } from "./lib/telemetry";
 import type { OutputChunk, RunResult, RuntimeFlavor, SnippetPayload } from "./lib/types";
 
@@ -119,59 +117,41 @@ export function App() {
     return <Landing theme={theme} onToggleTheme={toggleTheme} />;
   }
 
-  return <Playground route={route} theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} />;
+  return <Playground theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} />;
 }
 
 interface PlaygroundProps {
-  route: ReturnType<typeof getAppRoute>;
   theme: Theme;
   onToggleTheme: () => void;
   isEmbed: boolean;
 }
 
-function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
+function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
   const [code, setCode] = useState(defaultExample.code);
   const [flavor, setFlavor] = useState<RuntimeFlavor>(defaultExample.flavor);
   const [selectedExample, setSelectedExample] = useState(defaultExample.id);
   const [result, setResult] = useState<RunResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [shortUrl, setShortUrl] = useState<string | null>(null);
   const [copiedInput, setCopiedInput] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
 
   const snippet: SnippetPayload = useMemo(() => ({ code, flavor }), [code, flavor]);
 
   useEffect(() => {
-    const shared = readShareHash(window.location.hash);
-    if (shared) {
+    let cancelled = false;
+
+    void readShareHash(window.location.hash).then((shared) => {
+      if (cancelled || !shared) return;
       setCode(shared.code);
       setFlavor(shared.flavor);
       setSelectedExample("custom");
-      return;
-    }
+    });
 
-    if ((route.mode === "snippet" || route.mode === "embed") && route.id) {
-      const snippetId = route.id;
-
-      fetchSnippet(snippetId)
-        .then((remoteSnippet) => {
-          setCode(remoteSnippet.code);
-          setFlavor(remoteSnippet.flavor);
-          setSelectedExample("custom");
-        })
-        .catch((error) => {
-          setResult({
-            id: snippetId,
-            flavor: "lua54",
-            status: "error",
-            durationMs: 0,
-            chunks: [{ kind: "stderr", text: error instanceof Error ? error.message : String(error) }]
-          });
-          reportRuntimeError(error);
-        });
-    }
-  }, [route]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const execute = useCallback(async () => {
     setIsRunning(true);
@@ -229,32 +209,15 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
     setSelectedExample(example.id);
     setCode(example.code);
     setFlavor(example.flavor);
-    setShortUrl(null);
     setNotice(`Loaded ${example.title}.`);
   };
 
   const copyShareLink = async () => {
-    const shareUrl = buildShareUrl(snippet);
+    const shareUrl = await buildShareUrl(snippet);
     await navigator.clipboard.writeText(shareUrl);
-    window.history.replaceState(null, "", makeShareHash(snippet));
+    window.history.replaceState(null, "", new URL(shareUrl).hash);
     setNotice("Share link copied.");
     trackEvent("copy_share", { flavor });
-  };
-
-  const createShortLink = async () => {
-    setNotice("Creating short link...");
-
-    try {
-      const saved = await saveSnippet(snippet);
-      const url = new URL(`/p/${saved.id}`, window.location.origin).toString();
-      await navigator.clipboard.writeText(url);
-      setShortUrl(url);
-      setNotice("Short link copied.");
-      trackEvent("short_link", { flavor });
-    } catch (error) {
-      reportRuntimeError(error);
-      setNotice(error instanceof Error ? error.message : String(error));
-    }
   };
 
   const copyInput = async () => {
@@ -273,7 +236,7 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
   };
 
   const copyEmbed = async () => {
-    const embedUrl = shortUrl ? shortUrl.replace("/p/", "/embed/") : buildShareUrl(snippet, true);
+    const embedUrl = await buildShareUrl(snippet, true);
     const iframe = `<iframe src="${embedUrl}" title="Weblua snippet" loading="lazy" width="100%" height="420"></iframe>`;
     await navigator.clipboard.writeText(iframe);
     setNotice("Embed code copied.");
@@ -286,7 +249,6 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
     setSelectedExample(defaultExample.id);
     setResult(null);
     setNotice(null);
-    setShortUrl(null);
     window.history.replaceState(null, "", "/playground");
   };
 
@@ -375,9 +337,6 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
             </button>
             {!isEmbed && (
               <>
-                <button className="icon-button text-icon" type="button" onClick={createShortLink} title="Create short link">
-                  <Share2 size={16} />
-                </button>
                 <button className="icon-button text-icon" type="button" onClick={copyEmbed} title="Copy iframe embed">
                   <Code2 size={16} />
                 </button>
@@ -429,7 +388,6 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
                 onChange={(value) => {
                   setCode(value);
                   setSelectedExample("custom");
-                  setShortUrl(null);
                 }}
               />
             </div>

@@ -15,8 +15,8 @@ Date: 2026-07-09
    - Fix: prerender/SSG (e.g. `vite-plugin-ssr` or a prerender plugin) so crawlers get real HTML on first fetch.
 
 2. **Every route shares one static `<title>`/description/canonical.**
-   `/playground`, `/p/:id` (shared snippets), and `/embed/:id` all serve the exact same `index.html`, so the canonical tag literally claims every shared snippet page *is* the homepage ([index.html:31](../index.html#L31)). Social previews for a shared snippet link show generic Weblua copy instead of that snippet's content.
-   - Fix: per-route meta injection, e.g. in the Cloudflare Worker ([cloudflare/worker.ts](../cloudflare/worker.ts)) or via prerendering.
+   `/playground` and `/embed` serve the exact same `index.html` as the homepage, so the canonical tag claims every shared snippet page *is* the homepage ([index.html:31](../index.html#L31)). Shared snippets live entirely in the URL fragment (`#c=...`), which servers and crawlers never see, so social previews can't reflect a snippet's content and always show generic Weblua copy.
+   - Fix: per-route meta injection via prerendering/SSR (there is no backend to inject it at request time).
 
 3. **No `robots.txt` or `sitemap.xml`** in `public/` — neither file exists.
    - Fix: add both; sitemap should list `/` and `/playground` at minimum.

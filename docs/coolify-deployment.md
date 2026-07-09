@@ -2,12 +2,9 @@
 
 Weblua is a static, client-side single-page app (Vite + React). Everything runs in the
 browser — there is no Node server to keep alive in production, so Coolify only needs to
-build the app and serve the resulting `dist/` folder as static files.
-
-The one exception is the **optional Cloudflare Worker** for short links
-(`cloudflare/worker.ts`, KV-backed `/api/snippets/*`). That's Cloudflare-specific (KV
-storage) and is not part of this guide — see [Short links caveat](#short-links-caveat)
-below for what that means for your deployment.
+build the app and serve the resulting `dist/` folder as static files. Snippet sharing is
+handled entirely in the browser (the code is compressed into the link fragment), so there
+is no backend or database to provision.
 
 ## Prerequisites
 
@@ -37,7 +34,7 @@ recommended choice for this repo because it pins a working Node line.
 
 Use the checked-in `Dockerfile` in the repo root. It builds the Vite app with
 `node:22-slim`, then serves `dist/` with nginx. The included nginx config falls back
-to `index.html` for app routes like `/playground`, `/p/:id`, and `/embed/:id`.
+to `index.html` for app routes like `/playground` and `/embed`.
 
 In Coolify:
 
@@ -63,13 +60,11 @@ resolve to a patch version older than Vite/Rolldown requires.
 | Static Site | enabled |
 | Publish Directory | `dist` |
 
-`npm run build` runs `tsc -b && tsc -p tsconfig.worker.json && vite build` — it
-type-checks the app **and** the Cloudflare Worker types before building. That's fine;
-type-checking the worker doesn't require deploying it.
+`npm run build` runs `tsc -b && vite build` — it type-checks the app before building.
 
 > If you use a custom static server instead of the checked-in Dockerfile, make sure app
-> routes fall back to `index.html`; otherwise direct visits to `/playground`, `/p/:id`,
-> or `/embed/:id` will 404 before React loads.
+> routes fall back to `index.html`; otherwise direct visits to `/playground` or `/embed`
+> will 404 before React loads.
 
 ## 3. Environment variables (build-time!)
 
@@ -111,7 +106,7 @@ Node 20.18 or 22.11, switch back to the Dockerfile build pack.
 Click **Deploy**. Watch the build logs — you should see:
 
 ```
-> tsc -b && tsc -p tsconfig.worker.json && vite build
+> tsc -b && vite build
 ...
 vite v8.x building for production...
 ✓ built in ...
@@ -129,19 +124,11 @@ In the application's **Webhooks/General** settings, enable the GitHub deploy web
 poll-based auto-deploy if you're not using the GitHub App integration) so pushes to
 `main` trigger a rebuild automatically.
 
-## Short links caveat
+## Sharing
 
-The `/p/:id` short-link feature (`cloudflare/worker.ts` + KV namespace, wired up via
-`wrangler.toml`) is Cloudflare Workers + KV specific. Coolify has no equivalent to
-Cloudflare KV, so:
-
-- **Fragment-based sharing still works** with no backend — that's the default sharing
-  method and needs nothing from this guide.
-- If you want `/p/:id` short links too, keep deploying `cloudflare/worker.ts` to
-  Cloudflare separately (`npm run worker:deploy`) and point `/api/snippets/*` at it via
-  DNS/CNAME or a reverse-proxy rule on your Coolify domain — or reimplement that endpoint
-  against a database (e.g. Postgres/Redis via a Coolify-hosted service) if you'd rather
-  drop the Cloudflare dependency entirely.
+Sharing needs nothing from this deployment. Snippets are compressed into the link
+fragment (`/playground#c=...`) and restored in the browser, so shared links and `/embed`
+iframes work on any static host with no backend, database, or extra services.
 
 ## Troubleshooting
 
@@ -150,4 +137,4 @@ Cloudflare KV, so:
 | Build fails with `Cannot find native binding` / `@rolldown/binding-linux-x64-gnu` | Node patch version too old under Nixpacks — use Dockerfile build pack or Node 22.12+ |
 | Build succeeds, blank page | Check browser console for a wasm MIME-type/CORS error; ensure the static server (nginx) serves `.wasm` with `application/wasm` (default nginx does) |
 | Analytics/Sentry not showing up | `VITE_*` vars must be set **before** the build that's currently deployed — redeploy after adding them |
-| `/p/:id` links 404 | Expected — see [Short links caveat](#short-links-caveat) |
+| Shared `/playground#c=...` or `/embed` link 404s on direct visit | Static server isn't falling back to `index.html` — see the route-fallback note under [Option A](#option-a--dockerfile-build-pack-recommended) |

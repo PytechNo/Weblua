@@ -1,8 +1,7 @@
 export type AppRoute =
-  | { mode: "landing"; id?: undefined }
-  | { mode: "playground"; id?: undefined }
-  | { mode: "snippet"; id: string }
-  | { mode: "embed"; id?: string };
+  | { mode: "landing" }
+  | { mode: "playground" }
+  | { mode: "embed" };
 
 export function getAppRoute(
   pathname = window.location.pathname,
@@ -11,16 +10,15 @@ export function getAppRoute(
   const parts = pathname.split("/").filter(Boolean);
 
   if (parts[0] === "embed") {
-    return { mode: "embed", id: parts[1] };
-  }
-
-  if (parts[0] === "p" && parts[1]) {
-    return { mode: "snippet", id: parts[1] };
+    return { mode: "embed" };
   }
 
   if (parts.length === 0) {
-    // Legacy share links point at "/" with a #share= hash.
-    return hash.includes("share=") ? { mode: "playground" } : { mode: "landing" };
+    // Share links point at "/" only in the legacy `#share=` form; the current
+    // `#c=` codec targets /playground directly. Recognize both here so a bare
+    // "/" that carries a snippet opens the playground rather than the landing page.
+    const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    return params.has("share") || params.has("c") ? { mode: "playground" } : { mode: "landing" };
   }
 
   return { mode: "playground" };
