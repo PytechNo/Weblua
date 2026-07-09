@@ -8,3 +8,11 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+declare module "luau-web/src/lib/Luau.Web.Asyncify.js" {
+  const createModule: (
+    moduleArg?: Record<string, unknown>
+  ) => Promise<Record<string, unknown>>;
+
+  export default createModule;
+}

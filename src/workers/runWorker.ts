@@ -41,34 +41,12 @@ ctx.onmessage = async (event: MessageEvent<RunRequest>) => {
         {
           kind: "stderr",
           text: normalizeError(error)
-        },
-        ...pcallLimitationNote(request)
+        }
       ]
     };
     ctx.postMessage(result);
   }
 };
-
-// The prebuilt luau-web WASM is compiled without C++ exception catching, so
-// Luau's pcall/xpcall cannot intercept runtime errors — they escape the
-// protected call and abort the whole script. When a Luau run errors out and the
-// source actually used pcall/xpcall, surface a hint so the failure isn't
-// mistaken for a bug in the user's code. See README ("Known limitations").
-function pcallLimitationNote(request: RunRequest): OutputChunk[] {
-  if (request.flavor !== "luau") return [];
-  if (!/\b(?:pcall|xpcall)\b/.test(request.code)) return [];
-
-  return [
-    {
-      kind: "system",
-      text:
-        "Note: pcall/xpcall can't catch runtime errors in the Luau engine yet — " +
-        "the upstream luau-web WASM is built without exception support, so errors " +
-        "escape protected calls and stop the script. Switch to the Lua 5.4 runtime " +
-        "if you need working error handling. (Tracked in the Weblua README.)"
-    }
-  ];
-}
 
 async function runLua54(
   code: string,
@@ -108,7 +86,7 @@ async function runLuau(
     // luau-web currently ships a browser build. If the shim is blocked, report a runtime error.
   }
 
-  const { LuauState, InternalLuauWasmModule } = await import("luau-web");
+  const { LuauState, InternalLuauWasmModule } = await import("../lib/luauWebAsyncify");
   const state = await LuauState.createAsync({});
 
   try {
@@ -125,7 +103,7 @@ async function runLuau(
     if (typeof runnable !== "function") {
       throw new Error(runnable);
     }
-    // luau-web executes via Asyncify/JSPI, so runnable() returns a promise.
+    // luau-web executes via Asyncify, so runnable() returns a promise.
     // Awaiting it lets print() fire before the state is destroyed below.
     await runnable();
   } finally {
