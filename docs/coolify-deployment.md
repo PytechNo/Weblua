@@ -15,8 +15,9 @@ below for what that means for your deployment.
 - This repo pushed to a Git provider Coolify can reach (GitHub is simplest — connect it
   via a Coolify **GitHub App** source for private repos, or use the plain Git URL if the
   repo is public).
-- Node 20+ compatibility — the project uses TypeScript 7 and Vite 8, so pin a modern Node
-  version explicitly (see step 4).
+- Node 22.12+ compatibility — the project uses TypeScript 7 and Vite 8/Rolldown. The
+  included Dockerfile uses the official `node:22-slim` image so Coolify does not have to
+  guess the Node patch version through Nixpacks.
 
 ## 1. Create a new resource
 
@@ -29,46 +30,41 @@ In your Coolify project/environment:
 
 ## 2. Pick a build pack
 
-Coolify auto-detects a build pack; you want one of these two. **Static** is the
-simpler/recommended choice for this repo.
+Coolify auto-detects a build pack; you want one of these two. **Dockerfile** is the
+recommended choice for this repo because it pins a working Node line.
 
-### Option A — Static build pack (recommended)
+### Option A — Dockerfile build pack (recommended)
 
-Coolify builds the app in a throwaway container, then serves the output directory with
-an internal nginx image. No Dockerfile needed.
+Use the checked-in `Dockerfile` in the repo root. It builds the Vite app with
+`node:22-slim`, then serves `dist/` with nginx.
+
+In Coolify:
 
 | Setting | Value |
 |---|---|
-| Build Pack | `Static` |
-| Install Command | `npm ci` |
-| Build Command | `npm run build` |
+| Build Pack | `Dockerfile` |
+| Base Directory | `/` |
+| Port / Port Exposes | `80` |
+
+Leave **Pre-deployment** and **Post-deployment** blank. Coolify will run the Dockerfile
+steps directly.
+
+### Option B — Nixpacks static build pack (works only with a new enough Node patch)
+
+Coolify builds the app in a throwaway container, then serves the output directory with
+an internal static web server. This is convenient, but Nixpacks only accepts major Node
+versions such as `20` or `22`; depending on Coolify's pinned Nix package set, that can
+resolve to a patch version older than Vite/Rolldown requires.
+
+| Setting | Value |
+|---|---|
+| Build Pack | `Nixpacks` |
+| Static Site | enabled |
 | Publish Directory | `dist` |
 
 `npm run build` runs `tsc -b && tsc -p tsconfig.worker.json && vite build` — it
 type-checks the app **and** the Cloudflare Worker types before building. That's fine;
 type-checking the worker doesn't require deploying it.
-
-### Option B — Dockerfile build pack (more control)
-
-Use this if you want to pin the nginx config yourself (e.g. custom caching headers for
-the wasm/worker bundles). Add a `Dockerfile` to the repo root:
-
-```dockerfile
-# syntax=docker/dockerfile:1
-FROM node:20-slim AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-```
-
-Then in Coolify: Build Pack → `Dockerfile`, and leave the rest as defaults. Coolify will
-build and run this image directly.
 
 > No SPA-fallback rewrite (`try_files ... /index.html`) is required — Weblua doesn't use
 > path-based client routing (React Router etc.), only URL-hash sharing, so nginx's
@@ -95,12 +91,11 @@ baked into the built JS.
 
 ## 4. Pin the Node version
 
-The project has no `engines` field, so Coolify will use its default Nixpacks/Docker Node
-image. To avoid surprises with TypeScript 7 / Vite 8:
+The Dockerfile path is already pinned to the official Node 22 image.
 
-- **Static/Nixpacks build pack**: set a Coolify build-time environment variable
-  `NIXPACKS_NODE_VERSION=20` (or 22).
-- **Dockerfile build pack**: already pinned via `FROM node:20-slim` in the sample above.
+If you use Nixpacks instead, do not use Node 20 unless Coolify resolves it to 20.19 or
+newer, and do not use Node 22 unless it resolves to 22.12 or newer. If Coolify logs show
+Node 20.18 or 22.11, switch back to the Dockerfile build pack.
 
 ## 5. Networking, port, and domain
 
@@ -151,7 +146,7 @@ Cloudflare KV, so:
 
 | Symptom | Likely cause |
 |---|---|
-| Build fails on `tsc -b` | Node version too old — pin Node 20+, see step 4 |
+| Build fails with `Cannot find native binding` / `@rolldown/binding-linux-x64-gnu` | Node patch version too old under Nixpacks — use Dockerfile build pack or Node 22.12+ |
 | Build succeeds, blank page | Check browser console for a wasm MIME-type/CORS error; ensure the static server (nginx) serves `.wasm` with `application/wasm` (default nginx does) |
 | Analytics/Sentry not showing up | `VITE_*` vars must be set **before** the build that's currently deployed — redeploy after adding them |
 | `/p/:id` links 404 | Expected — see [Short links caveat](#short-links-caveat) |
