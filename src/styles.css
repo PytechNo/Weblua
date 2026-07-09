@@ -1615,6 +1615,12 @@ body[data-theme="light"] .orb {
   transform: none;
 }
 
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
 .button-primary {
   background: linear-gradient(120deg, var(--primary), var(--violet));
   border-color: transparent;

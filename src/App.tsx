@@ -4,7 +4,9 @@ import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
 import {
+  Check,
   Code2,
+  Copy,
   Link,
   Moon,
   Play,
@@ -135,6 +137,8 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [shortUrl, setShortUrl] = useState<string | null>(null);
+  const [copiedInput, setCopiedInput] = useState(false);
+  const [copiedOutput, setCopiedOutput] = useState(false);
 
   const snippet: SnippetPayload = useMemo(() => ({ code, flavor }), [code, flavor]);
 
@@ -251,6 +255,21 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
       reportRuntimeError(error);
       setNotice(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const copyInput = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopiedInput(true);
+    trackEvent("copy_input", { flavor });
+    window.setTimeout(() => setCopiedInput(false), 1500);
+  };
+
+  const copyOutput = async () => {
+    const text = (result?.chunks ?? []).map((chunk) => chunk.text).join("\n");
+    await navigator.clipboard.writeText(text);
+    setCopiedOutput(true);
+    trackEvent("copy_output", { flavor });
+    window.setTimeout(() => setCopiedOutput(false), 1500);
   };
 
   const copyEmbed = async () => {
@@ -386,6 +405,15 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
               </span>
               <span className="pane-title">{flavor === "luau" ? "main.luau" : "main.lua"}</span>
               <span className="pane-badge">{flavor === "luau" ? "Luau" : "Lua 5.4"}</span>
+              <button
+                className="icon-button text-icon"
+                type="button"
+                onClick={copyInput}
+                title="Copy code"
+                aria-label="Copy code"
+              >
+                {copiedInput ? <Check size={16} /> : <Copy size={16} />}
+              </button>
             </div>
             <div className="editor-host">
               <CodeMirror
@@ -414,6 +442,16 @@ function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
                 <strong>Output</strong>
                 <span>{isRunning ? "running..." : result ? formatRunMeta(result) : "Ready"}</span>
               </div>
+              <button
+                className="icon-button text-icon"
+                type="button"
+                onClick={copyOutput}
+                disabled={!result?.chunks.length}
+                title="Copy output"
+                aria-label="Copy output"
+              >
+                {copiedOutput ? <Check size={16} /> : <Copy size={16} />}
+              </button>
               <button
                 className="icon-button text-icon"
                 type="button"
