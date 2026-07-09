@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Weblua">
+  <rect width="64" height="64" rx="10" fill="#141414"/>
+  <path d="M18 20h12l16 24H34L18 20Z" fill="#f7f2e8"/>
+  <path d="M18 44h12l8-12-6-9-14 21Z" fill="#00d4aa"/>
+</svg>

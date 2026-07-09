@@ -1,0 +1,9 @@
+name = "weblua-snippets"
+main = "cloudflare/worker.ts"
+compatibility_date = "2026-07-09"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "WEBLUA_SNIPPETS"
+id = "replace_with_production_kv_namespace_id"
+preview_id = "replace_with_preview_kv_namespace_id"
