@@ -1,5 +1,6 @@
 import { StreamLanguage, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lua } from "@codemirror/legacy-modes/mode/lua";
+import { type Diagnostic as CmDiagnostic, lintGutter, linter } from "@codemirror/lint";
 import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
@@ -11,12 +12,14 @@ import {
   Moon,
   Play,
   RotateCcw,
+  ShieldCheck,
   Sun,
   Trash2
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GitHubMark, MoonMark } from "./components/Brand";
 import { Landing } from "./components/Landing";
+import { checkSnippet } from "./lib/checker";
 import { buildShareUrl, readShareHash } from "./lib/codec";
 import { defaultExample, examples } from "./lib/examples";
 import { runSnippet } from "./lib/runner";
@@ -132,6 +135,7 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
   const [selectedExample, setSelectedExample] = useState(defaultExample.id);
   const [result, setResult] = useState<RunResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [copiedInput, setCopiedInput] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
@@ -190,17 +194,83 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
     }
   }, [code, flavor]);
 
+  const fileName = flavor === "luau" ? "main.luau" : "main.lua";
+
+  const runCheck = useCallback(async () => {
+    setIsChecking(true);
+    setNotice(null);
+
+    try {
+      const checked = await checkSnippet(code, flavor);
+      if (!checked) {
+        setNotice("Check could not run. Try again.");
+        return;
+      }
+
+      trackEvent("check", { flavor, problems: checked.diagnostics.length });
+
+      const clean = checked.diagnostics.length === 0;
+      setResult({
+        id: checked.id,
+        flavor,
+        status: clean ? "ok" : "error",
+        durationMs: checked.durationMs,
+        chunks: clean
+          ? [{ kind: "system", text: "Check passed: the compiler reported no problems." }]
+          : checked.diagnostics.map((diagnostic) => ({
+              kind: "stderr" as const,
+              text: `${fileName}:${diagnostic.line}: ${diagnostic.message}`
+            }))
+      });
+    } finally {
+      setIsChecking(false);
+    }
+  }, [code, flavor, fileName]);
+
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
-        void execute();
+        if (event.shiftKey) {
+          void runCheck();
+        } else {
+          void execute();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [execute]);
+  }, [execute, runCheck]);
+
+  const editorExtensions = useMemo(() => {
+    const liveLinter = linter(
+      async (view): Promise<CmDiagnostic[]> => {
+        const source = view.state.doc.toString();
+        if (!source.trim()) return [];
+
+        const checked = await checkSnippet(source, flavor);
+        // Keep the last squiggles rather than flashing false positives when
+        // the checker itself failed, and drop stale results after edits.
+        if (!checked || view.state.doc.toString() !== source) return [];
+
+        return checked.diagnostics.map((diagnostic) => {
+          const lineNumber = Math.min(Math.max(diagnostic.line, 1), view.state.doc.lines);
+          const line = view.state.doc.line(lineNumber);
+          return {
+            from: line.from,
+            to: line.to,
+            severity: diagnostic.severity,
+            message: diagnostic.message,
+            source: flavor === "luau" ? "luau" : "lua 5.4"
+          };
+        });
+      },
+      { delay: 600 }
+    );
+
+    return [languageExtension, liveLinter, lintGutter()];
+  }, [flavor]);
 
   const loadExample = (id: string) => {
     const example = examples.find((item) => item.id === id);
@@ -331,6 +401,16 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
                 Ctrl ↵
               </kbd>
             </button>
+            <button
+              className="button"
+              type="button"
+              onClick={runCheck}
+              disabled={isChecking}
+              title="Compile without running (Ctrl+Shift+Enter)"
+            >
+              <ShieldCheck size={16} />
+              {isChecking ? "Checking" : "Check"}
+            </button>
             <button className="button" type="button" onClick={copyShareLink}>
               <Link size={16} />
               Copy link
@@ -362,7 +442,7 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
                 <i />
                 <i />
               </span>
-              <span className="pane-title">{flavor === "luau" ? "main.luau" : "main.lua"}</span>
+              <span className="pane-title">{fileName}</span>
               <span className="pane-badge">{flavor === "luau" ? "Luau" : "Lua 5.4"}</span>
               <button
                 className="icon-button text-icon"
@@ -379,7 +459,7 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
                 value={code}
                 height="100%"
                 theme={theme === "dark" ? darkEditorTheme : lightEditorTheme}
-                extensions={[languageExtension]}
+                extensions={editorExtensions}
                 basicSetup={{
                   foldGutter: true,
                   highlightActiveLine: true,

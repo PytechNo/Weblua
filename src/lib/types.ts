@@ -14,9 +14,24 @@ export interface OutputChunk {
 
 export interface RunRequest extends SnippetPayload {
   id: string;
+  mode?: "run" | "check";
 }
 
 export type RunStatus = "ok" | "error" | "timeout";
+
+export interface Diagnostic {
+  /** 1-based source line the compiler reported. */
+  line: number;
+  message: string;
+  severity: "error" | "warning";
+}
+
+export interface CheckResult {
+  id: string;
+  flavor: RuntimeFlavor;
+  durationMs: number;
+  diagnostics: Diagnostic[];
+}
 
 export interface RunResult {
   id: string;

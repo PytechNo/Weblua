@@ -1,10 +1,44 @@
 import { LuaFactory } from "wasmoon";
-import type { OutputChunk, RunRequest, RunResult } from "../lib/types";
+import { parseCompileError } from "../lib/diagnostics";
+import type { CheckResult, Diagnostic, OutputChunk, RunRequest, RunResult } from "../lib/types";
 
 const ctx: Worker = self as unknown as Worker;
 
+// One factory per worker so repeated checks reuse the fetched glue wasm.
+const luaFactory = new LuaFactory();
+
 ctx.onmessage = async (event: MessageEvent<RunRequest>) => {
   const request = event.data;
+
+  if (request.mode === "check") {
+    await handleCheck(request);
+    return;
+  }
+
+  await handleRun(request);
+};
+
+async function handleCheck(request: RunRequest): Promise<void> {
+  const startedAt = performance.now();
+  let diagnostics: Diagnostic[] = [];
+
+  try {
+    diagnostics =
+      request.flavor === "lua54" ? await checkLua54(request.code) : await checkLuau(request.code);
+  } catch (error) {
+    diagnostics = [parseCompileError(normalizeError(error))];
+  }
+
+  const result: CheckResult = {
+    id: request.id,
+    flavor: request.flavor,
+    durationMs: performance.now() - startedAt,
+    diagnostics
+  };
+  ctx.postMessage(result);
+}
+
+async function handleRun(request: RunRequest): Promise<void> {
   const startedAt = performance.now();
   const chunks: OutputChunk[] = [];
 
@@ -46,13 +80,41 @@ ctx.onmessage = async (event: MessageEvent<RunRequest>) => {
     };
     ctx.postMessage(result);
   }
-};
+}
+
+async function checkLua54(code: string): Promise<Diagnostic[]> {
+  const engine = await luaFactory.createEngine();
+
+  try {
+    engine.global.loadString(code, "main.lua");
+    return [];
+  } catch (error) {
+    return [parseCompileError(normalizeError(error))];
+  } finally {
+    engine.global.close();
+  }
+}
+
+async function checkLuau(code: string): Promise<Diagnostic[]> {
+  const { LuauState } = await loadLuauModule();
+  const state = await LuauState.createAsync({});
+
+  try {
+    const loaded = state.loadstring(code, "main.luau", false);
+    if (typeof loaded === "string") {
+      return [parseCompileError(loaded)];
+    }
+    return [];
+  } finally {
+    state.destroy();
+  }
+}
 
 async function runLua54(
   code: string,
   push: (kind: OutputChunk["kind"], values: unknown[]) => void
 ): Promise<void> {
-  const engine = await new LuaFactory().createEngine({
+  const engine = await luaFactory.createEngine({
     functionTimeout: 4500,
     traceAllocations: true
   });
@@ -67,10 +129,7 @@ async function runLua54(
   }
 }
 
-async function runLuau(
-  code: string,
-  push: (kind: OutputChunk["kind"], values: unknown[]) => void
-): Promise<void> {
+async function loadLuauModule() {
   const globalRef = globalThis as Record<string, unknown>;
 
   if (typeof globalRef.window === "undefined") {
@@ -86,7 +145,14 @@ async function runLuau(
     // luau-web currently ships a browser build. If the shim is blocked, report a runtime error.
   }
 
-  const { LuauState, InternalLuauWasmModule } = await import("../lib/luauWebAsyncify");
+  return import("../lib/luauWebAsyncify");
+}
+
+async function runLuau(
+  code: string,
+  push: (kind: OutputChunk["kind"], values: unknown[]) => void
+): Promise<void> {
+  const { LuauState, InternalLuauWasmModule } = await loadLuauModule();
   const state = await LuauState.createAsync({});
 
   try {
