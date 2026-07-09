@@ -3,31 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Weblua is a free, browser-based Lua playground. Run Lua 5.4 and Luau snippets instantly with WebAssembly, then share them with a link — no installs, no sign-up."
-    />
-    <meta
-      name="keywords"
-      content="run lua online,lua playground,luau playground,lua compiler online,lua 5.4,luau"
-    />
+    <meta name="description" content="Weblua is a free, browser-based Lua playground. Run Lua 5.4 and Luau snippets instantly with WebAssembly, then share them with a link — no installs, no sign-up." />
+    <meta name="keywords" content="run lua online,lua playground,luau playground,lua compiler online,lua 5.4,luau" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Weblua" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="Weblua — The Lua playground in your browser" />
-    <meta
-      property="og:description"
-      content="Run Lua 5.4 and Luau snippets in the browser in milliseconds, then share them with a link."
-    />
+    <meta property="og:description" content="Run Lua 5.4 and Luau snippets in the browser in milliseconds, then share them with a link." />
     <meta property="og:url" content="https://weblua.com/" />
-    <meta property="og:image" content="https://weblua.com/og.svg" />
+    <meta property="og:image" content="https://weblua.com/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Weblua — the Lua playground in your browser. Run Lua 5.4 and Luau in milliseconds." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Weblua — The Lua playground in your browser" />
-    <meta
-      name="twitter:description"
-      content="A fast, free online Lua and Luau playground. No installs, no sign-up."
-    />
-    <meta name="twitter:image" content="https://weblua.com/og.svg" />
+    <meta name="twitter:description" content="A fast, free online Lua and Luau playground. No installs, no sign-up." />
+    <meta name="twitter:image" content="https://weblua.com/og.png" />
+    <meta name="twitter:image:alt" content="Weblua — the Lua playground in your browser. Run Lua 5.4 and Luau in milliseconds." />
     <meta name="theme-color" content="#05070f" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="canonical" href="https://weblua.com/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -36,8 +34,98 @@
       rel="stylesheet"
     />
     <title>Weblua — Lua &amp; Luau Playground in Your Browser</title>
+    <script type="application/ld+json" data-page="landing">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Weblua",
+        "url": "https://weblua.com/"
+      }
+    </script>
+    <script type="application/ld+json" data-page="landing">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Weblua",
+        "url": "https://weblua.com/",
+        "description": "A free, browser-based playground for running and sharing Lua 5.4 and Luau code, powered by WebAssembly.",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Any (web browser)",
+        "browserRequirements": "Requires JavaScript and WebAssembly",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "license": "https://github.com/PytechNo/Weblua/blob/main/LICENSE"
+      }
+    </script>
+    <script type="application/ld+json" data-page="landing">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is Weblua really free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. The playground is free, open source (MIT), and has no usage limits. Run as much Lua as you like — it's your CPU doing the work."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does my code get sent to a server?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Lua runs inside a WebAssembly sandbox in your browser tab, and nothing is uploaded. Even sharing keeps your code local — the snippet is compressed straight into the link's URL fragment, which browsers never send to a server."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What's the difference between Lua 5.4 and Luau?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Lua 5.4 is the latest official Lua release. Luau is Roblox's fork with gradual typing, generics, and performance-focused extensions. Weblua ships both runtimes so you can compare behavior side by side."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I use Weblua offline?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Once the page and runtimes are cached, execution is fully client-side — no network round trips per run. A full offline mode (PWA) is on the roadmap."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do embeds work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Every snippet can be turned into an iframe embed. The embedded playground is fully interactive: readers can edit the code and re-run it without leaving your page."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I contribute?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Absolutely — Weblua is developed in the open on GitHub. Issues, feature requests, and pull requests are all welcome."
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
+    <noscript>
+      <style>
+        .reveal {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+      </style>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

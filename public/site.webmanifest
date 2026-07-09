@@ -1,0 +1,21 @@
+{
+  "name": "Weblua — Lua & Luau Playground",
+  "short_name": "Weblua",
+  "description": "A fast, free, client-side Lua 5.4 and Luau playground.",
+  "start_url": "/playground",
+  "display": "standalone",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

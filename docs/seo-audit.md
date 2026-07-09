@@ -2,6 +2,26 @@
 
 Date: 2026-07-09
 
+> **Status (2026-07-09): all six gaps below are fixed.**
+>
+> 1. Landing page is now prerendered at build time — `scripts/postbuild.mjs` renders
+>    [src/entry-prerender.tsx](../src/entry-prerender.tsx) and bakes the full landing markup into
+>    `dist/index.html` (crawlers get real HTML; the client re-renders over it with `createRoot`).
+> 2. `dist/playground/index.html` and `dist/embed/index.html` are generated with route-specific
+>    title/description/canonical; the embed route is `noindex`. Nginx's `try_files $uri $uri/`
+>    serves them. (Per-snippet previews remain impossible without a backend — snippets live in the
+>    URL fragment.)
+> 3. `public/robots.txt` and `public/sitemap.xml` added.
+> 4. JSON-LD added to [index.html](../index.html): `WebSite`, `SoftwareApplication`, and `FAQPage`
+>    (stripped from non-landing routes at build time).
+> 5. `og:image`/`twitter:image` now point to a brand-matched 1200×630 `public/og.png`, with
+>    `og:image:width/height/alt` set. The old `og.svg` is no longer referenced.
+> 6. `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, and `site.webmanifest` added and linked.
+>
+> Extras: `og:site_name`/`og:locale`/`twitter:image:alt` meta, a PNG favicon fallback link,
+> gzip enabled in [nginx.conf](../nginx.conf), and a `<noscript>` override so prerendered
+> `.reveal` content is visible without JS.
+
 ## What's already good
 
 - Clean single `<h1>`, logical `<h2>`/`<h3>` hierarchy, ARIA labels, skip link, semantic `<nav>`/`<main>`/`<footer>` ([src/components/Landing.tsx](../src/components/Landing.tsx))
