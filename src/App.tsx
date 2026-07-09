@@ -1,11 +1,10 @@
-import { StreamLanguage } from "@codemirror/language";
+import { StreamLanguage, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { lua } from "@codemirror/legacy-modes/mode/lua";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import CodeMirror from "@uiw/react-codemirror";
 import {
   Code2,
-  ExternalLink,
   Link,
   Moon,
   Play,
@@ -15,6 +14,8 @@ import {
   Trash2
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { GitHubMark, MoonMark } from "./components/Brand";
+import { Landing } from "./components/Landing";
 import { buildShareUrl, makeShareHash, readShareHash } from "./lib/codec";
 import { defaultExample, examples } from "./lib/examples";
 import { runSnippet } from "./lib/runner";
@@ -26,20 +27,76 @@ import type { OutputChunk, RunResult, RuntimeFlavor, SnippetPayload } from "./li
 type Theme = "dark" | "light";
 
 const languageExtension = StreamLanguage.define(lua);
-const fixedEditorTheme = EditorView.theme({
+
+const sharedEditorChrome = {
   "&": {
-    height: "100%"
+    height: "100%",
+    fontSize: "13.5px",
+    backgroundColor: "transparent"
+  },
+  "&.cm-focused": {
+    outline: "none"
   },
   ".cm-scroller": {
-    fontFamily: '"Berkeley Mono", "SFMono-Regular", Consolas, monospace'
+    fontFamily: 'var(--font-mono, "JetBrains Mono", Consolas, monospace)',
+    lineHeight: "1.65"
   },
   ".cm-content": {
     padding: "16px 0"
   },
   ".cm-line": {
     padding: "0 18px"
+  },
+  ".cm-gutters": {
+    backgroundColor: "transparent",
+    border: "none",
+    borderRight: "1px solid var(--border)",
+    paddingLeft: "6px"
   }
-});
+};
+
+const darkEditorTheme = [
+  EditorView.theme(
+    {
+      ...sharedEditorChrome,
+      "&": { ...sharedEditorChrome["&"], color: "#dbe4ff" },
+      ".cm-content": { ...sharedEditorChrome[".cm-content"], caretColor: "#8da2ff" },
+      ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#8da2ff" },
+      ".cm-gutters": { ...sharedEditorChrome[".cm-gutters"], color: "#4a5478" },
+      ".cm-activeLine": { backgroundColor: "rgba(124, 144, 255, 0.07)" },
+      ".cm-activeLineGutter": { backgroundColor: "transparent", color: "#93a3d8" },
+      ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+        backgroundColor: "rgba(91, 124, 255, 0.28)"
+      },
+      ".cm-matchingBracket": {
+        backgroundColor: "rgba(34, 211, 238, 0.18)",
+        outline: "1px solid rgba(34, 211, 238, 0.35)"
+      }
+    },
+    { dark: true }
+  ),
+  syntaxHighlighting(oneDarkHighlightStyle)
+];
+
+const lightEditorTheme = [
+  EditorView.theme({
+    ...sharedEditorChrome,
+    "&": { ...sharedEditorChrome["&"], color: "#1d2340" },
+    ".cm-content": { ...sharedEditorChrome[".cm-content"], caretColor: "#4055e8" },
+    ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#4055e8" },
+    ".cm-gutters": { ...sharedEditorChrome[".cm-gutters"], color: "#9aa2c4" },
+    ".cm-activeLine": { backgroundColor: "rgba(64, 85, 232, 0.05)" },
+    ".cm-activeLineGutter": { backgroundColor: "transparent", color: "#5a6494" },
+    ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+      backgroundColor: "rgba(64, 85, 232, 0.16)"
+    },
+    ".cm-matchingBracket": {
+      backgroundColor: "rgba(8, 145, 178, 0.12)",
+      outline: "1px solid rgba(8, 145, 178, 0.3)"
+    }
+  }),
+  syntaxHighlighting(defaultHighlightStyle)
+];
 
 export function App() {
   const route = useMemo(() => getAppRoute(), []);
@@ -47,6 +104,30 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(() =>
     window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"
   );
+
+  useEffect(() => {
+    document.body.dataset.theme = theme;
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }, []);
+
+  if (route.mode === "landing") {
+    return <Landing theme={theme} onToggleTheme={toggleTheme} />;
+  }
+
+  return <Playground route={route} theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} />;
+}
+
+interface PlaygroundProps {
+  route: ReturnType<typeof getAppRoute>;
+  theme: Theme;
+  onToggleTheme: () => void;
+  isEmbed: boolean;
+}
+
+function Playground({ route, theme, onToggleTheme, isEmbed }: PlaygroundProps) {
   const [code, setCode] = useState(defaultExample.code);
   const [flavor, setFlavor] = useState<RuntimeFlavor>(defaultExample.flavor);
   const [selectedExample, setSelectedExample] = useState(defaultExample.id);
@@ -56,10 +137,6 @@ export function App() {
   const [shortUrl, setShortUrl] = useState<string | null>(null);
 
   const snippet: SnippetPayload = useMemo(() => ({ code, flavor }), [code, flavor]);
-
-  useEffect(() => {
-    document.body.dataset.theme = theme;
-  }, [theme]);
 
   useEffect(() => {
     const shared = readShareHash(window.location.hash);
@@ -191,38 +268,39 @@ export function App() {
     setResult(null);
     setNotice(null);
     setShortUrl(null);
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, "", "/playground");
   };
+
+  const statusKind = isRunning ? "running" : result ? result.status : "idle";
 
   return (
     <div className={isEmbed ? "app app-embed" : "app"}>
       {!isEmbed && (
         <header className="app-header">
           <a className="brand" href="/" aria-label="Weblua home">
-            <span className="brand-mark" aria-hidden="true">
-              WL
-            </span>
+            <MoonMark size={26} />
             <h1>Weblua</h1>
+            <span className="brand-tag">Playground</span>
           </a>
           <div className="header-actions">
             <a
-              className="icon-link"
+              className="icon-button"
               href="https://github.com/PytechNo/Weblua"
               target="_blank"
               rel="noreferrer"
               title="Open GitHub repository"
               aria-label="Open GitHub repository"
             >
-              <ExternalLink size={18} />
+              <GitHubMark size={17} />
             </a>
             <button
               className="icon-button"
               type="button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              onClick={onToggleTheme}
               title={theme === "dark" ? "Use light theme" : "Use dark theme"}
               aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}
             >
-              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
             </button>
           </div>
         </header>
@@ -242,78 +320,108 @@ export function App() {
             </select>
           </label>
 
-          <label className="control runtime-control">
+          <div className="control" role="group" aria-label="Runtime">
             <span>Runtime</span>
-            <select
-              value={flavor}
-              onChange={(event) => setFlavor(event.target.value as RuntimeFlavor)}
-            >
-              <option value="lua54">Lua 5.4</option>
-              <option value="luau">Luau</option>
-            </select>
-          </label>
+            <div className="segmented">
+              <button
+                type="button"
+                className={flavor === "lua54" ? "is-active" : ""}
+                onClick={() => setFlavor("lua54")}
+                aria-pressed={flavor === "lua54"}
+              >
+                Lua 5.4
+              </button>
+              <button
+                type="button"
+                className={flavor === "luau" ? "is-active" : ""}
+                onClick={() => setFlavor("luau")}
+                aria-pressed={flavor === "luau"}
+              >
+                Luau
+              </button>
+            </div>
+          </div>
 
           <div className="toolbar-actions">
             <button className="button button-primary" type="button" onClick={execute} disabled={isRunning}>
-              <Play size={17} />
+              <Play size={16} />
               {isRunning ? "Running" : "Run"}
+              <kbd className="run-kbd" aria-hidden="true">
+                Ctrl ↵
+              </kbd>
             </button>
             <button className="button" type="button" onClick={copyShareLink}>
-              <Link size={17} />
+              <Link size={16} />
               Copy link
             </button>
             {!isEmbed && (
               <>
                 <button className="icon-button text-icon" type="button" onClick={createShortLink} title="Create short link">
-                  <Share2 size={17} />
+                  <Share2 size={16} />
                 </button>
                 <button className="icon-button text-icon" type="button" onClick={copyEmbed} title="Copy iframe embed">
-                  <Code2 size={17} />
+                  <Code2 size={16} />
                 </button>
                 <button className="icon-button text-icon" type="button" onClick={reset} title="Reset playground">
-                  <RotateCcw size={17} />
+                  <RotateCcw size={16} />
                 </button>
               </>
             )}
           </div>
         </div>
 
-        {notice && <div className="notice">{notice}</div>}
+        {notice && (
+          <div className="notice" role="status">
+            {notice}
+          </div>
+        )}
 
         <div className="panes">
           <section className="editor-pane" aria-label="Lua editor">
-            <CodeMirror
-              value={code}
-              height="100%"
-              theme={theme === "dark" ? "dark" : "light"}
-              extensions={[languageExtension, fixedEditorTheme, theme === "dark" ? oneDark : []]}
-              basicSetup={{
-                foldGutter: true,
-                highlightActiveLine: true,
-                lineNumbers: true
-              }}
-              onChange={(value) => {
-                setCode(value);
-                setSelectedExample("custom");
-                setShortUrl(null);
-              }}
-            />
+            <div className="pane-header">
+              <span className="window-dots" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              <span className="pane-title">{flavor === "luau" ? "main.luau" : "main.lua"}</span>
+              <span className="pane-badge">{flavor === "luau" ? "Luau" : "Lua 5.4"}</span>
+            </div>
+            <div className="editor-host">
+              <CodeMirror
+                value={code}
+                height="100%"
+                theme={theme === "dark" ? darkEditorTheme : lightEditorTheme}
+                extensions={[languageExtension]}
+                basicSetup={{
+                  foldGutter: true,
+                  highlightActiveLine: true,
+                  lineNumbers: true
+                }}
+                onChange={(value) => {
+                  setCode(value);
+                  setSelectedExample("custom");
+                  setShortUrl(null);
+                }}
+              />
+            </div>
           </section>
 
           <aside className="output-pane" aria-label="Execution output">
             <div className="output-header">
+              <span className={`status-dot status-${statusKind}`} aria-hidden="true" />
               <div>
                 <strong>Output</strong>
-                <span>{result ? formatRunMeta(result) : "Ready"}</span>
+                <span>{isRunning ? "running..." : result ? formatRunMeta(result) : "Ready"}</span>
               </div>
               <button
-                className="icon-button"
+                className="icon-button text-icon"
                 type="button"
                 onClick={() => setResult(null)}
                 title="Clear output"
                 aria-label="Clear output"
               >
-                <Trash2 size={17} />
+                <Trash2 size={16} />
               </button>
             </div>
             <OutputView chunks={result?.chunks ?? []} />
@@ -323,8 +431,8 @@ export function App() {
 
       {!isEmbed && (
         <footer className="seo-line">
-          Weblua is a Lua playground for running Lua online, testing Luau snippets,
-          checking Lua 5.4 behavior, and sharing small programs from the browser.
+          Weblua is a Lua playground for running Lua online, testing Luau snippets, checking Lua
+          5.4 behavior, and sharing small programs from the browser.
         </footer>
       )}
     </div>
@@ -333,7 +441,11 @@ export function App() {
 
 function OutputView({ chunks }: { chunks: OutputChunk[] }) {
   if (chunks.length === 0) {
-    return <div className="empty-output">Run a snippet to see stdout, stderr, and timing.</div>;
+    return (
+      <div className="empty-output">
+        <p>Press Run — or hit Ctrl+Enter — to see stdout, stderr, and timing here.</p>
+      </div>
+    );
   }
 
   return (

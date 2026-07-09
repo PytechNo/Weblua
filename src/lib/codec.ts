@@ -62,7 +62,7 @@ export function readShareHash(hash: string): SnippetPayload | null {
 
 export function buildShareUrl(snippet: SnippetPayload, embed = false): string {
   const url = new URL(window.location.href);
-  url.pathname = embed ? "/embed" : "/";
+  url.pathname = embed ? "/embed" : "/playground";
   url.search = "";
   url.hash = makeShareHash(snippet);
   return url.toString();
