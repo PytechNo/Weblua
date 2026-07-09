@@ -1,0 +1,15 @@
+{
+  "format": "weblua-project",
+  "version": 1,
+  "project": {
+    "flavor": "lua54",
+    "entry": "main.lua",
+    "files": {
+      "lib/config/init.lua": "return {\n  appName = \"Weblua capability tour\",\n  multiplier = 3\n}\n",
+      "lib/format.lua": "local format = {}\n\nfunction format.heading(text)\n  return (\"=\"):rep(#text + 4) .. \"\\n= \" .. text .. \" =\\n\" .. (\"=\"):rep(#text + 4)\nend\n\nfunction format.quote(text)\n  return string.format(\"%q\", text)\nend\n\nreturn format\n",
+      "lib/math/stats.lua": "local stats = {}\n\nfunction stats.sum(values)\n  local total = 0\n  for _, value in ipairs(values) do\n    total = total + value\n  end\n  return total\nend\n\nfunction stats.average(values)\n  if #values == 0 then return 0 end\n  return stats.sum(values) / #values\nend\n\nreturn stats\n",
+      "lib/require_probe.lua": "_G.weblua_capability_probe_loads = (_G.weblua_capability_probe_loads or 0) + 1\n\nreturn {\n  loads = _G.weblua_capability_probe_loads\n}\n",
+      "main.lua": "local config = require(\"lib.config\")\nlocal format = require(\"lib.format\")\nlocal stats = require(\"lib.math.stats\")\n\n-- Requiring the same module twice should return the cached value and execute it once.\nlocal firstProbe = require(\"lib.require_probe\")\nlocal secondProbe = require(\"lib.require_probe\")\nassert(firstProbe == secondProbe, \"require cache did not return the same module\")\nassert(firstProbe.loads == 1, \"module executed more than once\")\n\n-- Type a name on the first line, then any number of notes below it.\nlocal name = io.read(\"*l\") or \"anonymous\"\nlocal notes = io.read(\"*a\") or \"\"\n\nlocal values = { 4, 8, 15, 16, 23, 42 }\nlocal total = stats.sum(values)\nlocal average = stats.average(values)\n\nprint(format.heading(config.appName))\nprint(\"runtime:\", _VERSION)\nprint(\"hello:\", format.quote(name))\nprint(\"module cache loads:\", firstProbe.loads)\nprint(\"numbers:\", table.concat(values, \", \"))\nprint(\"sum:\", total)\nprint(\"average x multiplier:\", average * config.multiplier)\n\nif notes ~= \"\" then\n  print(\"notes:\")\n  print(notes)\nelse\n  print(\"notes: (none supplied)\")\nend\n\nprint(\"Capability tour finished successfully.\")\n"
+    }
+  }
+}
