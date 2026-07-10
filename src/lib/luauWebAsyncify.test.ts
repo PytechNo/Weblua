@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { InternalLuauWasmModule, LuauState } from "./luauWebAsyncify";
 
 describe("luauWebAsyncify", () => {
-  it("keeps running after a protected Luau runtime error", async () => {
+  it("keeps running after pcall and xpcall handle Luau runtime errors", async () => {
     const lines: string[] = [];
     const state = await LuauState.createAsync({});
 
@@ -16,8 +16,14 @@ describe("luauWebAsyncify", () => {
 
       const run = state.loadstring(
         `
-          local ok, err = pcall(function() error("boom") end)
-          print("ok=" .. tostring(ok) .. " err=" .. tostring(err))
+          local pcallOk, pcallErr = pcall(function() error("pcall boom") end)
+          print("pcall ok=" .. tostring(pcallOk) .. " err=" .. tostring(pcallErr))
+
+          local xpcallOk, xpcallErr = xpcall(
+            function() error("xpcall boom") end,
+            function(message) return "handled: " .. tostring(message) end
+          )
+          print("xpcall ok=" .. tostring(xpcallOk) .. " err=" .. tostring(xpcallErr))
           print("still running")
         `,
         "repro",
@@ -30,7 +36,8 @@ describe("luauWebAsyncify", () => {
     }
 
     expect(lines).toEqual([
-      'ok=false err=[string "repro"]:2: boom',
+      'pcall ok=false err=[string "repro"]:2: pcall boom',
+      'xpcall ok=false err=handled: [string "repro"]:6: xpcall boom',
       "still running"
     ]);
   });

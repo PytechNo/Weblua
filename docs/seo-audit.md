@@ -28,7 +28,7 @@ Date: 2026-07-09
 - Meta description, OG tags, Twitter card, canonical link all present and reasonable length ([index.html](../index.html))
 - FAQ content is real, crawlable text (native `<details>`/`<summary>`)
 
-## Gaps, ranked by impact
+## Original gaps, all resolved
 
 1. **Pure client-rendered SPA, no prerendering/SSR.**
    `dist/index.html` ships an empty `<div id="root"></div>` — all content, including the `<h1>` and FAQ text, only exists after JS executes ([dist/index.html:42-44](../dist/index.html#L42-L44)). Googlebot can render this, but it's a second-pass, delayed render, and Bing/other crawlers/link-unfurlers often won't. This is the biggest structural risk for a marketing-focused landing page.
@@ -53,6 +53,10 @@ Date: 2026-07-09
    Minor, but Lighthouse SEO/PWA checks flag it.
    - Fix: add `apple-touch-icon.png` and a `site.webmanifest`.
 
-## Suggested next step
+## Ongoing checks
 
-Highest-leverage, lowest-risk wins: #3, #4, and #5 (robots.txt + sitemap + JSON-LD + a real PNG og-image). #1 and #2 are architectural changes worth scoping separately.
+- Keep the runtime list and FAQ answers synchronized between `Landing.tsx`, `index.html`,
+  route-specific metadata in `scripts/postbuild.mjs`, and `site.webmanifest`.
+- Regenerate `public/og.png` whenever the source card in `public/og.svg` changes.
+- Run `npm run build` and confirm the prerendered landing contains its `<h1>` and that
+  `/playground` and `/embed` do not retain landing-only structured data.

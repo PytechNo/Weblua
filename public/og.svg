@@ -2,7 +2,7 @@
   <rect width="1200" height="630" fill="#141414"/>
   <rect x="88" y="92" width="1024" height="446" rx="14" fill="#1f1f1f" stroke="#383838"/>
   <text x="130" y="175" fill="#f7f2e8" font-family="Aptos, Helvetica Neue, sans-serif" font-size="76" font-weight="700">Weblua</text>
-  <text x="132" y="242" fill="#cfc7b7" font-family="Aptos, Helvetica Neue, sans-serif" font-size="34">Lua 5.4 and Luau playground</text>
+  <text x="132" y="242" fill="#cfc7b7" font-family="Aptos, Helvetica Neue, sans-serif" font-size="34">Lua 5.1–5.4 and Luau playground</text>
   <rect x="132" y="306" width="438" height="124" rx="8" fill="#101010" stroke="#383838"/>
   <text x="162" y="358" fill="#00d4aa" font-family="Consolas, monospace" font-size="30">print("hello, lua")</text>
   <text x="162" y="398" fill="#f7f2e8" font-family="Consolas, monospace" font-size="26">hello, lua</text>

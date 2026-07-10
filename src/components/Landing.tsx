@@ -122,7 +122,7 @@ function HeroCodeWindow() {
         <span className="hero-output-text">1 1 2 3 5 8 13 21</span>
         <span className="hero-output-meta">
           <Check size={12} />
-          finished in 4 ms
+          finished
         </span>
       </div>
     </div>
@@ -181,28 +181,28 @@ function highlightLua(line: string) {
 const FEATURES = [
   {
     icon: Zap,
-    title: "Instant execution",
-    body: "Real Lua compiled to WebAssembly boots in milliseconds. Hit Run and see stdout before your terminal would even open."
+    title: "In-browser execution",
+    body: "Lua and Luau run in a dedicated Web Worker through WebAssembly. A five-second timeout stops runaway programs without freezing the page."
   },
   {
     icon: Braces,
     title: "Lua 5.1–5.4 and Luau",
-    body: "Choose Lua 5.1 through 5.4 or Roblox's Luau — type annotations, generics, and all — with a single dropdown."
+    body: "Choose Lua 5.1 through 5.4 or the Luau language. Luau syntax is supported, but Weblua is not Roblox Studio and does not provide Roblox APIs or static type analysis."
   },
   {
     icon: Link,
     title: "Share with a link",
-    body: "Every source project compresses into a URL. Paste it in a code review, a Discord thread, or a bug report and it just runs."
+    body: "Source files, the entry point, and the runtime compress into a URL fragment up to 32 KiB. Input, output, and browser-local project metadata stay out of the link."
   },
   {
     icon: Code2,
     title: "Embed anywhere",
-    body: "Drop a live, runnable playground into docs, blog posts, or tutorials with one iframe tag. No SDK, no API keys."
+    body: "Copy a lazy-loading iframe for documentation sites that allow embeds. Readers can edit the shared source and run it inline without an SDK or API key."
   },
   {
     icon: Lock,
-    title: "Private by design",
-    body: "Your code executes entirely in your browser's sandbox, and nothing is ever uploaded — shared links carry source files inside the URL itself."
+    title: "Source stays local",
+    body: "Normal execution has no code-upload backend. Deployments can optionally enable anonymous Plausible usage events and sanitized Sentry error reports; neither integration intentionally includes project source."
   },
   {
     icon: Keyboard,
@@ -214,62 +214,60 @@ const FEATURES = [
 const STEPS = [
   {
     title: "Write",
-    body: "Open the playground and start typing — or pick from a dozen curated examples covering metatables, coroutines, and Luau types."
+    body: "Open the playground and start typing, or load one of thirteen examples—including a multi-file capability tour with modules and preset input."
   },
   {
     title: "Run",
-    body: "Your code executes in an isolated WebAssembly sandbox, right in the tab. stdout, stderr, and timing stream straight to the output pane."
+    body: "A Web Worker runs the selected runtime. When the run finishes—or reaches the five-second timeout—the output pane shows stdout, stderr, status, and elapsed time."
   },
   {
     title: "Share",
-    body: "Copy a self-contained link or grab an iframe embed. Whoever opens it sees exactly what you see."
+    body: "Copy a source-only project link or iframe. Recipients receive the same files, entry point, and runtime; preset input, output, and saved-project metadata remain local."
   }
 ] as const;
 
-const TESTIMONIALS = [
+const BOUNDARIES = [
   {
-    quote:
-      "I keep Weblua pinned next to my editor. Testing a gnarly string pattern used to mean spinning up a REPL — now it's one tab and Ctrl+Enter.",
-    name: "Marta K.",
-    role: "Game systems engineer",
-    initials: "MK"
+    title: "Language runtime, not Roblox",
+    body:
+      "Luau code can use language features such as annotations and generics, but Weblua does not emulate Roblox services, instances, globals, or Studio tooling."
   },
   {
-    quote:
-      "The Luau support is the killer feature. I can sanity-check typed snippets before they ever touch our Roblox codebase, and share the link in review.",
-    name: "Devon A.",
-    role: "Roblox developer",
-    initials: "DA"
+    title: "Compile check, not type checking",
+    body:
+      "Check compiles every file and reports syntax diagnostics. It does not run Luau's static analyzer, infer types, or validate a project against Roblox APIs."
   },
   {
-    quote:
-      "We embed runnable examples straight into our plugin docs. Readers press Run instead of squinting at static code blocks. Support tickets went down.",
-    name: "Priya S.",
-    role: "Developer advocate",
-    initials: "PS"
+    title: "Purposefully bounded runs",
+    body:
+      "Runs stop after five seconds. Lua 5.4 also has a 32 MiB runtime memory cap, and URL sharing has a 32 KiB encoded limit; larger projects can be exported instead."
   }
 ] as const;
 
 const FAQS = [
   {
     q: "Is Weblua really free?",
-    a: "Yes. The playground is free, open source (MIT), and has no usage limits. Run as much Lua as you like — it's your CPU doing the work."
+    a: "Yes. The hosted playground has no account or server-side run quota, and the source is MIT licensed. Individual runs stop after five seconds, and source links have a 32 KiB encoded-size limit."
   },
   {
-    q: "Does my code get sent to a server?",
-    a: "No. Lua runs inside a WebAssembly sandbox in your browser tab, and nothing is uploaded. Even sharing keeps your code local — the source project is compressed straight into the link's URL fragment, which browsers never send to a server."
+    q: "Does my code get sent to an execution server?",
+    a: "Normal execution does not upload project source to an execution backend. Sharing compresses source into the URL fragment, which is not part of the HTTP request. A deployment owner may optionally enable Plausible usage events and sanitized Sentry error reports; project source is not intentionally included."
   },
   {
     q: "Which Lua versions does Weblua support?",
-    a: "Weblua runs official Lua 5.1, 5.2, 5.3, and 5.4, plus Luau — Roblox's typed Lua-derived language. Select one runtime per run to check the behavior you need."
+    a: "Weblua runs Lua 5.1, 5.2, 5.3, and 5.4, plus the Luau language. Select one runtime per project. Luau support covers the language runtime, not Roblox APIs or the Roblox production environment."
+  },
+  {
+    q: "Does Weblua type-check Luau?",
+    a: "No. The Check action compiles every source file and reports syntax diagnostics. It does not invoke Luau's static type analyzer, even though Luau annotations and generic syntax can be compiled and executed."
   },
   {
     q: "Can I use Weblua offline?",
-    a: "Once the page and runtimes are cached, execution is fully client-side — no network round trips per run. A full offline mode (PWA) is on the roadmap."
+    a: "Weblua does not currently guarantee offline startup because it has no service worker or complete PWA cache. An already loaded session can run without an execution-server round trip, and browser HTTP caches may help, but reliable offline mode is not implemented."
   },
   {
     q: "How do embeds work?",
-    a: "Every source project can be turned into an iframe embed. The embedded playground is fully interactive: readers can edit files and re-run it without leaving your page."
+    a: "Weblua generates a lazy-loading iframe whose /embed#c=2… URL contains the same source-only project payload as a share link. On sites that permit iframes, readers can edit files and re-run the project inline."
   },
   {
     q: "Can I contribute?",
@@ -277,58 +275,47 @@ const FAQS = [
   }
 ] as const;
 
-const PRICING = [
+const ACCESS_OPTIONS = [
   {
-    name: "Playground",
+    name: "Hosted playground",
     price: "$0",
-    period: "free forever",
-    tagline: "Everything you need to write, run, and share Lua.",
+    period: "no account",
+    tagline: "Use the public browser playground.",
     cta: "Start coding",
     href: "/playground",
-    featured: false,
-    soon: false,
     features: [
-      "Unlimited runs, client-side",
+      "No server-side run quota",
       "Lua 5.1–5.4 and Luau runtimes",
       "Shareable multi-file projects",
-      "iframe embeds",
-      "Curated example library",
-      "Open source, MIT licensed"
+      "Source-only links and iframe embeds"
     ]
   },
   {
-    name: "Pro",
-    price: "$6",
-    period: "per month",
-    tagline: "For developers who live in the playground.",
-    cta: "Coming soon",
+    name: "Self-host",
+    price: "MIT",
+    period: "your infrastructure",
+    tagline: "Build the static app and serve it yourself.",
+    cta: "Deployment guide",
+    href: "https://github.com/PytechNo/Weblua/blob/main/docs/coolify-deployment.md",
+    features: [
+      "Dockerfile and nginx configuration",
+      "No database or execution backend",
+      "Optional telemetry stays opt-in",
+      "Static-host compatible routes"
+    ]
+  },
+  {
+    name: "Source code",
+    price: "Open",
+    period: "MIT licensed",
+    tagline: "Inspect, fork, and contribute on GitHub.",
+    cta: "View repository",
     href: "https://github.com/PytechNo/Weblua",
-    featured: true,
-    soon: true,
     features: [
-      "Everything in Playground",
-      "Private snippets",
-      "Named collections and folders",
-      "Custom embed themes",
-      "Vanity short links",
-      "Priority support"
-    ]
-  },
-  {
-    name: "Team",
-    price: "Custom",
-    period: "annual billing",
-    tagline: "Shared workspaces for studios and classrooms.",
-    cta: "Get in touch",
-    href: "https://github.com/PytechNo/Weblua/issues",
-    featured: false,
-    soon: true,
-    features: [
-      "Everything in Pro",
-      "Shared team library",
-      "SSO and access controls",
-      "Self-hosting support",
-      "Onboarding for classrooms"
+      "Complete React and worker source",
+      "Versioned project export format",
+      "Tests for codecs, storage, and runtimes",
+      "Public issue tracker"
     ]
   }
 ] as const;
@@ -372,7 +359,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
           <nav className="nav-links" aria-label="Primary">
             <a href="#features">Features</a>
             <a href="#how">How it works</a>
-            <a href="#pricing">Pricing</a>
+            <a href="#access">Access</a>
             <a href="#faq">FAQ</a>
           </nav>
 
@@ -418,8 +405,8 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <a href="#how" onClick={closeMenu}>
               How it works
             </a>
-            <a href="#pricing" onClick={closeMenu}>
-              Pricing
+            <a href="#access" onClick={closeMenu}>
+              Access
             </a>
             <a href="#faq" onClick={closeMenu}>
               FAQ
@@ -452,8 +439,8 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 The Lua playground that lives in <span className="grad-text">your browser</span>
               </h1>
               <p className="hero-sub reveal" style={{ transitionDelay: "120ms" }}>
-                Write, run, and share Lua projects and Luau snippets in milliseconds — powered by
-                WebAssembly. No installs, no servers, no sign-up. Just code.
+                Write, run, and share multi-file Lua and Luau projects directly in your browser.
+                No local toolchain, execution backend, or account is required.
               </p>
               <div className="hero-ctas reveal" style={{ transitionDelay: "180ms" }}>
                 <a className="btn btn-primary btn-lg" href="/playground">
@@ -472,10 +459,10 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
               </div>
               <ul className="hero-meta reveal" style={{ transitionDelay: "240ms" }}>
                 <li>
-                  <Check size={14} /> Free forever
+                  <Check size={14} /> Free and MIT licensed
                 </li>
                 <li>
-                  <Check size={14} /> 100% client-side
+                  <Check size={14} /> Client-side execution
                 </li>
                 <li>
                   <Check size={14} /> Open source
@@ -501,20 +488,20 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
           </ul>
           <dl className="stats reveal" style={{ transitionDelay: "140ms" }}>
             <div className="stat">
-              <dt>Cold start</dt>
-              <dd>&lt;50 ms</dd>
+              <dt>Run timeout</dt>
+              <dd>5 s</dd>
             </div>
             <div className="stat">
               <dt>Runtimes</dt>
               <dd>5</dd>
             </div>
             <div className="stat">
-              <dt>Client-side execution</dt>
-              <dd>100%</dd>
+              <dt>Share payload limit</dt>
+              <dd>32 KiB</dd>
             </div>
             <div className="stat">
-              <dt>Installs required</dt>
-              <dd>0</dd>
+              <dt>Account required</dt>
+              <dd>No</dd>
             </div>
           </dl>
         </section>
@@ -603,19 +590,19 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 <div className="showcase-text">
                   <h3>Real runtimes, real output</h3>
                   <p>
-                    This is not a syntax checker. Weblua runs Lua 5.1 through 5.4 and Luau
-                    compiled to WebAssembly, so metatables, coroutines, and error semantics behave
-                    exactly like they do in production.
+                    Weblua executes Lua 5.1 through 5.4 and Luau through WebAssembly rather than
+                    simulating output. Language behavior comes from the selected runtime, while the
+                    browser host supplies a virtual project filesystem and preset input.
                   </p>
                   <ul className="check-list">
                     <li>
                       <Check size={15} /> stdout, stderr, and timing per run
                     </li>
                     <li>
-                      <Check size={15} /> Isolated sandbox — infinite loops can't freeze the tab
+                      <Check size={15} /> Worker isolation and a five-second execution timeout
                     </li>
                     <li>
-                      <Check size={15} /> Ctrl+Enter to re-run instantly
+                      <Check size={15} /> Ctrl+Enter to start another run
                     </li>
                   </ul>
                 </div>
@@ -636,7 +623,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                     <span className="mock-line mock-out">apples: 4</span>
                     <span className="mock-line mock-out">oranges: 7</span>
                     <span className="mock-line mock-out">pears: 2</span>
-                    <span className="mock-line mock-ok">✓ finished in 3 ms</span>
+                    <span className="mock-line mock-ok">✓ finished — timing shown in the output pane</span>
                   </div>
                 </div>
               </div>
@@ -652,13 +639,13 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                   </p>
                   <ul className="check-list">
                     <li>
-                      <Check size={15} /> Links preserve code <em>and</em> runtime choice
+                      <Check size={15} /> Links preserve files, entry point, and runtime choice
                     </li>
                     <li>
                       <Check size={15} /> One link for chat, commits, and reviews
                     </li>
                     <li>
-                      <Check size={15} /> Recipients can edit and re-run immediately
+                      <Check size={15} /> Input, output, and local metadata remain browser-local
                     </li>
                   </ul>
                 </div>
@@ -666,11 +653,11 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                   <div className="mock-terminal mock-share">
                     <span className="mock-chip">
                       <Link size={13} />
-                      weblua.com/playground#c=1L…
+                      weblua.com/playground#c=2…
                     </span>
                     <span className="mock-line mock-ok">✓ Share link copied to clipboard</span>
                     <span className="mock-divider" />
-                    <span className="mock-line tok-comment">-- anyone who opens it sees:</span>
+                    <span className="mock-line tok-comment">-- the source-only project restores:</span>
                     <span className="mock-line">
                       <span className="tok-keyword">local</span> greeting = <span className="tok-string">"hello, reviewer"</span>
                     </span>
@@ -686,17 +673,18 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                   <h3>Live code blocks for your docs</h3>
                   <p>
                     Replace static code samples with playgrounds your readers can actually run.
-                    One iframe tag, fully interactive, themed to stay out of the way.
+                    The generated iframe is fully interactive and uses the same source-only URL
+                    payload as a normal share link.
                   </p>
                   <ul className="check-list">
                     <li>
-                      <Check size={15} /> Works in any blog, wiki, or docs site
+                      <Check size={15} /> Works on sites that permit iframe embeds
                     </li>
                     <li>
                       <Check size={15} /> Readers edit and re-run inline
                     </li>
                     <li>
-                      <Check size={15} /> Loads lazily — zero impact on page speed
+                      <Check size={15} /> loading="lazy" defers runtime work until the embed is near view
                     </li>
                   </ul>
                 </div>
@@ -707,10 +695,13 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                       <span className="tok-keyword">&lt;iframe</span>
                     </span>
                     <span className="mock-line">
-                      {"  "}src=<span className="tok-string">"https://weblua.com/embed/x7Kf2q"</span>
+                      {"  "}src=<span className="tok-string">"https://weblua.com/embed#c=2…"</span>
                     </span>
                     <span className="mock-line">
                       {"  "}width=<span className="tok-string">"100%"</span> height=<span className="tok-string">"420"</span>
+                    </span>
+                    <span className="mock-line">
+                      {"  "}loading=<span className="tok-string">"lazy"</span>
                     </span>
                     <span className="mock-line">
                       <span className="tok-keyword">/&gt;</span>
@@ -743,59 +734,49 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
           </ol>
         </section>
 
-        {/* ---------- Testimonials ---------- */}
-        <section className="section" aria-labelledby="testimonials-title">
+        {/* ---------- Boundaries ---------- */}
+        <section className="section" aria-labelledby="boundaries-title">
           <div className="section-head reveal">
-            <span className="eyebrow">Loved by Lua developers</span>
-            <h2 id="testimonials-title">
-              Less friction, <span className="grad-text">more Lua</span>
+            <span className="eyebrow">Scope</span>
+            <h2 id="boundaries-title">
+              Clear boundaries, <span className="grad-text">fewer surprises</span>
             </h2>
+            <p>Weblua is a focused browser playground, not a replacement for a full local or Roblox toolchain.</p>
           </div>
           <div className="testimonial-grid">
-            {TESTIMONIALS.map((testimonial, index) => (
-              <figure
+            {BOUNDARIES.map((boundary, index) => (
+              <article
                 className="card testimonial reveal"
                 style={{ transitionDelay: `${index * 90}ms` }}
-                key={testimonial.name}
+                key={boundary.title}
               >
-                <blockquote>
-                  <p>“{testimonial.quote}”</p>
-                </blockquote>
-                <figcaption>
-                  <span className="avatar" aria-hidden="true">
-                    {testimonial.initials}
-                  </span>
-                  <span>
-                    <strong>{testimonial.name}</strong>
-                    <small>{testimonial.role}</small>
-                  </span>
-                </figcaption>
-              </figure>
+                <h3>{boundary.title}</h3>
+                <p>{boundary.body}</p>
+              </article>
             ))}
           </div>
         </section>
 
-        {/* ---------- Pricing ---------- */}
-        <section className="section" id="pricing" aria-labelledby="pricing-title">
+        {/* ---------- Access ---------- */}
+        <section className="section" id="access" aria-labelledby="access-title">
           <div className="section-head reveal">
-            <span className="eyebrow">Pricing</span>
-            <h2 id="pricing-title">
-              The playground is free. <span className="grad-text">Forever.</span>
+            <span className="eyebrow">Access</span>
+            <h2 id="access-title">
+              Free to use. <span className="grad-text">Straightforward to self-host.</span>
             </h2>
             <p>
-              Weblua is open source and free to use without limits. Pro tiers fund hosting and are
-              on the way for power users and teams.
+              There are no paid plans advertised here. Use the hosted playground, deploy the static
+              app yourself, or work directly from the MIT-licensed source.
             </p>
           </div>
 
           <div className="pricing-grid">
-            {PRICING.map((tier, index) => (
+            {ACCESS_OPTIONS.map((tier, index) => (
               <article
-                className={`card price-card reveal${tier.featured ? " is-featured" : ""}`}
+                className="card price-card reveal"
                 style={{ transitionDelay: `${index * 90}ms` }}
                 key={tier.name}
               >
-                {tier.featured && <span className="price-flag">Most anticipated</span>}
                 <h3>{tier.name}</h3>
                 <p className="price-tagline">{tier.tagline}</p>
                 <p className="price-value">
@@ -811,12 +792,12 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                   ))}
                 </ul>
                 <a
-                  className={`btn ${tier.featured ? "btn-primary" : "btn-ghost"}${tier.soon ? " is-soon" : ""}`}
+                  className="btn btn-ghost"
                   href={tier.href}
                   {...(tier.href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
                 >
                   {tier.cta}
-                  {!tier.soon && <ArrowRight size={15} />}
+                  <ArrowRight size={15} />
                 </a>
               </article>
             ))}
@@ -850,7 +831,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <span className="cta-glow" aria-hidden="true" />
             <Cpu size={22} aria-hidden="true" className="cta-icon" />
             <h2 id="cta-title">Your next Lua idea is one tab away</h2>
-            <p>Open the playground and have code running before this sentence finishes.</p>
+            <p>Open the playground, choose a built-in example, or load the multi-file capability tour.</p>
             <div className="hero-ctas">
               <a className="btn btn-invert btn-lg" href="/playground">
                 <Play size={17} />
@@ -858,7 +839,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
               </a>
             </div>
             <small className="cta-hint">
-              <Gauge size={13} /> Average time to first run: under 5 seconds
+              <Gauge size={13} /> Every run is capped at five seconds to protect the tab
             </small>
           </div>
         </section>
@@ -881,7 +862,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <h4>Product</h4>
             <a href="/playground">Playground</a>
             <a href="#features">Features</a>
-            <a href="#pricing">Pricing</a>
+            <a href="#access">Access</a>
             <a href="#faq">FAQ</a>
           </nav>
           <nav className="footer-col" aria-label="Resources">

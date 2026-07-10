@@ -1,7 +1,7 @@
 {
-  "name": "Weblua — Lua & Luau Playground",
+  "name": "Weblua — Lua 5.1–5.4 & Luau Playground",
   "short_name": "Weblua",
-  "description": "A fast, free, client-side Lua 5.4 and Luau playground.",
+  "description": "A free browser playground for multi-file Lua 5.1–5.4 and Luau projects.",
   "start_url": "/playground",
   "display": "standalone",
   "background_color": "#05070f",

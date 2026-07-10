@@ -36,11 +36,15 @@ import {
   serializeProject,
   tryBuildProjectShareUrl
 } from "./lib/codec";
-import { defaultExample, examples } from "./lib/examples";
+import {
+  defaultExample,
+  exampleMatchesProject,
+  examples,
+  projectForExample
+} from "./lib/examples";
 import {
   createDefaultWorkspace,
   deleteProjectFile,
-  projectFromSnippet,
   renameProjectFile,
   runtimeFileExtension,
   setProjectEntry,
@@ -83,7 +87,7 @@ const sharedEditorChrome = {
     outline: "none"
   },
   ".cm-scroller": {
-    fontFamily: 'var(--font-mono, "JetBrains Mono", Consolas, monospace)',
+    fontFamily: 'var(--font-mono, "SFMono-Regular", Consolas, monospace)',
     lineHeight: "1.65"
   },
   ".cm-content": {
@@ -144,7 +148,12 @@ const lightEditorTheme = [
 ];
 
 function defaultWorkspace(): Workspace {
-  return createDefaultWorkspace(defaultExample.flavor, defaultExample.code);
+  const project = projectForExample(defaultExample);
+  return {
+    project,
+    activeFile: project.entry,
+    stdin: "stdin" in defaultExample ? defaultExample.stdin ?? "" : ""
+  };
 }
 
 function workspaceFromProject(project: ProjectPayload): Workspace {
@@ -254,12 +263,7 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
 
   const activeCode = workspace.project.files[workspace.activeFile] ?? "";
   const selectedExample = useMemo(() => {
-    const example = examples.find(
-      (candidate) =>
-        candidate.flavor === workspace.project.flavor &&
-        candidate.code === workspace.project.files[workspace.project.entry] &&
-        Object.keys(workspace.project.files).length === 1
-    );
+    const example = examples.find((candidate) => exampleMatchesProject(candidate, workspace.project));
     return example?.id ?? "custom";
   }, [workspace.project]);
 
@@ -384,7 +388,11 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
     const example = examples.find((item) => item.id === id);
     if (!example) return;
 
-    setWorkspace({ ...workspaceFromProject(projectFromSnippet(example)), activeProjectId: undefined });
+    setWorkspace({
+      ...workspaceFromProject(projectForExample(example)),
+      stdin: "stdin" in example ? example.stdin ?? "" : "",
+      activeProjectId: undefined
+    });
     setResult(null);
     setNotice(`Loaded ${example.title}.`);
   };

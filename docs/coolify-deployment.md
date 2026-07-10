@@ -1,10 +1,11 @@
 # Deploying Weblua on Coolify
 
-Weblua is a static, client-side single-page app (Vite + React). Everything runs in the
-browser — there is no Node server to keep alive in production, so Coolify only needs to
-build the app and serve the resulting `dist/` folder as static files. Snippet sharing is
-handled entirely in the browser (the code is compressed into the link fragment), so there
-is no backend or database to provision.
+Weblua is a static, client-side single-page app (Vite + React). Project execution and
+persistence run in the browser—there is no Node execution server to keep alive in
+production, so Coolify only needs to build the app and serve the resulting `dist/` folder
+as static files. Source-only project sharing uses the URL fragment, so there is no project
+backend or database to provision. Optional Plausible and Sentry integrations can still
+send sanitized usage/error telemetry when explicitly configured.
 
 ## Prerequisites
 
@@ -126,9 +127,10 @@ poll-based auto-deploy if you're not using the GitHub App integration) so pushes
 
 ## Sharing
 
-Sharing needs nothing from this deployment. Snippets are compressed into the link
-fragment (`/playground#c=...`) and restored in the browser, so shared links and `/embed`
-iframes work on any static host with no backend, database, or extra services.
+Sharing needs nothing from this deployment. Source-only projects are compressed into the
+link fragment (`/playground#c=2...`) and restored in the browser. Generated iframes use
+`/embed#c=2...`; both routes work on static hosts that provide the configured route
+fallback, without a project backend or database.
 
 ## Troubleshooting
 
@@ -137,4 +139,4 @@ iframes work on any static host with no backend, database, or extra services.
 | Build fails with `Cannot find native binding` / `@rolldown/binding-linux-x64-gnu` | Node patch version too old under Nixpacks — use Dockerfile build pack or Node 22.12+ |
 | Build succeeds, blank page | Check browser console for a wasm MIME-type/CORS error; ensure the static server (nginx) serves `.wasm` with `application/wasm` (default nginx does) |
 | Analytics/Sentry not showing up | `VITE_*` vars must be set **before** the build that's currently deployed — redeploy after adding them |
-| Shared `/playground#c=...` or `/embed` link 404s on direct visit | Static server isn't falling back to `index.html` — see the route-fallback note under [Option A](#option-a--dockerfile-build-pack-recommended) |
+| Shared `/playground#c=2...` or `/embed#c=2...` link 404s on direct visit | Static server isn't falling back to `index.html` — see the route-fallback note under [Option A](#option-a--dockerfile-build-pack-recommended) |

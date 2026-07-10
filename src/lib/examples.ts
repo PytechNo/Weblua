@@ -1,6 +1,8 @@
-import type { ExampleSnippet } from "./types";
+import capabilityTourDocument from "../../examples/weblua-capability-tour.weblua.json";
+import { assertProjectPayload, projectFromSnippet } from "./project";
+import type { PlaygroundExample, ProjectPayload } from "./types";
 
-export const examples: ExampleSnippet[] = [
+export const examples: PlaygroundExample[] = [
   {
     id: "hello",
     title: "Hello world",
@@ -157,7 +159,32 @@ end`
 end
 
 print(first({ "one", "two" }))`
+  },
+  {
+    id: "capability-tour",
+    title: "Multi-file capability tour",
+    project: assertProjectPayload(capabilityTourDocument.project),
+    stdin: "Ada\nfirst note\nsecond note"
   }
 ];
 
 export const defaultExample = examples[0];
+
+export function projectForExample(example: PlaygroundExample): ProjectPayload {
+  return "project" in example
+    ? assertProjectPayload(example.project)
+    : projectFromSnippet(example);
+}
+
+export function exampleMatchesProject(example: PlaygroundExample, project: ProjectPayload): boolean {
+  const candidate = projectForExample(example);
+  const candidatePaths = Object.keys(candidate.files);
+  const projectPaths = Object.keys(project.files);
+
+  return (
+    candidate.flavor === project.flavor &&
+    candidate.entry === project.entry &&
+    candidatePaths.length === projectPaths.length &&
+    candidatePaths.every((path) => candidate.files[path] === project.files[path])
+  );
+}

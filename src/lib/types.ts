@@ -84,3 +84,13 @@ export interface ExampleSnippet extends SnippetPayload {
   id: string;
   title: string;
 }
+
+export interface ExampleProject {
+  id: string;
+  title: string;
+  project: ProjectPayload;
+  /** Optional preset input loaded with the example. */
+  stdin?: string;
+}
+
+export type PlaygroundExample = ExampleSnippet | ExampleProject;

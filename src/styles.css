@@ -45,8 +45,8 @@
   --radius-sm: 9px;
   --radius: 14px;
   --radius-lg: 20px;
-  --font-sans: "Inter", "Aptos", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Berkeley Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans: "Aptos", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "Berkeley Mono", "SFMono-Regular", Consolas, monospace;
 
   --shadow-card: 0 1px 2px rgba(2, 4, 12, 0.5), 0 12px 32px -16px rgba(2, 4, 12, 0.7);
   --shadow-pop: 0 24px 64px -24px rgba(72, 100, 255, 0.35);
@@ -229,10 +229,6 @@ svg {
 .btn-invert:hover {
   transform: translateY(-2px);
   box-shadow: 0 16px 40px -12px rgba(2, 4, 12, 0.7);
-}
-
-.btn.is-soon {
-  opacity: 0.75;
 }
 
 .card {
@@ -1079,7 +1075,7 @@ body[data-theme="light"] .orb {
   line-height: 1.65;
 }
 
-/* Testimonials */
+/* Product boundaries */
 .testimonial-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1094,53 +1090,19 @@ body[data-theme="light"] .orb {
   padding: 26px 24px;
 }
 
-.testimonial blockquote {
+.testimonial h3 {
   margin: 0;
+  font-size: 17px;
 }
 
-.testimonial blockquote p {
+.testimonial > p {
   margin: 0;
-  color: var(--text);
-  font-size: 15px;
+  color: var(--muted);
+  font-size: 14.5px;
   line-height: 1.7;
 }
 
-.testimonial figcaption {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: auto;
-}
-
-.testimonial figcaption span:last-child {
-  display: flex;
-  flex-direction: column;
-}
-
-.testimonial strong {
-  font-size: 14px;
-}
-
-.testimonial small {
-  color: var(--muted-2);
-  font-size: 12.5px;
-}
-
-.avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, rgba(91, 124, 255, 0.3), rgba(34, 211, 238, 0.2));
-  border: 1px solid var(--border-strong);
-  color: var(--primary-soft);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-/* Pricing */
+/* Access options */
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1153,30 +1115,6 @@ body[data-theme="light"] .orb {
   flex-direction: column;
   gap: 14px;
   padding: 30px 28px;
-}
-
-.price-card.is-featured {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--surface), var(--surface)) padding-box,
-    var(--gradient) border-box;
-  box-shadow: var(--shadow-card), var(--shadow-pop);
-}
-
-.price-flag {
-  position: absolute;
-  top: -13px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 5px 14px;
-  border-radius: 999px;
-  background: var(--gradient);
-  color: #fff;
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .price-card h3 {
@@ -1199,7 +1137,7 @@ body[data-theme="light"] .orb {
 }
 
 .price-value strong {
-  font-size: 40px;
+  font-size: 34px;
   font-weight: 800;
   letter-spacing: -0.03em;
 }

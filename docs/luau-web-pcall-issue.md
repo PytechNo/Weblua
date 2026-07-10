@@ -1,6 +1,8 @@
 # Upstream issue draft for luau-web
 
-Ready to paste into https://github.com/xNasuni/luau-web/issues/new
+Status: the local Asyncify workaround is active and covered by `pcall` and `xpcall`
+regression tests. The JSPI fix described below is still required upstream. This report is
+ready to paste into https://github.com/xNasuni/luau-web/issues/new.
 
 ---
 
@@ -70,10 +72,12 @@ is probably to mirror the Asyncify split:
 - link `Luau.Web.JSPI` against `Luau.VM.JSPI`
 - keep `Luau.Web.Asyncify` linked against `Luau.VM.Asyncify`
 
-Then verify both the Luau-level protected-call path and the JS boundary path.
+Then verify `pcall` and `xpcall` through both the Luau-level protected-call path and the
+JS boundary path.
 
 ## Environment
 
 - luau-web 1.4.0
 - Reproduces when the JSPI build is selected.
-- Asyncify smoke test in Node catches the protected error correctly.
+- Weblua's Asyncify regression tests confirm that both `pcall` and `xpcall` catch the
+  protected error and continue execution.
