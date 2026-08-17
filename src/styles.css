@@ -50,6 +50,7 @@
 
   --shadow-card: 0 1px 2px rgba(2, 4, 12, 0.5), 0 12px 32px -16px rgba(2, 4, 12, 0.7);
   --shadow-pop: 0 24px 64px -24px rgba(72, 100, 255, 0.35);
+  --sale-banner-height: 40px;
   --nav-height: 68px;
 }
 
@@ -154,7 +155,31 @@ svg {
 }
 
 .skip-link:focus-visible {
-  top: 12px;
+  top: calc(var(--sale-banner-height) + 12px);
+}
+
+.sale-banner {
+  position: sticky;
+  inset: 0 0 auto;
+  z-index: 70;
+  min-height: var(--sale-banner-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 34%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.sale-banner a {
+  color: inherit;
+  font-weight: 650;
+  text-underline-offset: 3px;
 }
 
 /* ==========================================================================
@@ -318,7 +343,7 @@ body[data-theme="light"] .tok-keyword {
 
 .nav {
   position: fixed;
-  inset: 0 0 auto 0;
+  inset: var(--sale-banner-height) 0 auto 0;
   z-index: 50;
   transition: background-color 240ms ease, border-color 240ms ease, backdrop-filter 240ms ease;
   border-bottom: 1px solid transparent;
@@ -791,7 +816,7 @@ body[data-theme="light"] .orb {
   max-width: 1180px;
   margin: 0 auto;
   padding: 88px 22px;
-  scroll-margin-top: var(--nav-height);
+  scroll-margin-top: calc(var(--sale-banner-height) + var(--nav-height));
 }
 
 .section-narrow {
@@ -2302,6 +2327,16 @@ body[data-theme="light"] .orb {
 }
 
 @media (max-width: 560px) {
+  :root {
+    --sale-banner-height: 52px;
+  }
+
+  .sale-banner {
+    flex-direction: column;
+    gap: 0;
+    padding-block: 6px;
+  }
+
   .feature-grid,
   .testimonial-grid,
   .pricing-grid,
