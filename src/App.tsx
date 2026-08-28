@@ -28,7 +28,6 @@ import {
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitHubMark, MoonMark } from "./components/Brand";
 import { Landing } from "./components/Landing";
-import { SaleBanner } from "./components/SaleBanner";
 import { checkProject } from "./lib/checker";
 import {
   deserializeProject,
@@ -642,8 +641,6 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
 
   return (
     <div className={isEmbed ? "app app-embed" : "app"}>
-      <SaleBanner />
-
       {!isEmbed && (
         <header className="app-header">
           <a className="brand" href="/" aria-label="Weblua home">
