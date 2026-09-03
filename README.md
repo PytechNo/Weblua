@@ -83,6 +83,9 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
 - Lua 5.4's `io.read` override and Luau's `read` helper support `*l`, `*L`, and
   `*a`. Lua 5.1–5.3 receive the preset input through their standard byte-stream stdin.
 
+- Lua 5.4 routes `print`, `io.write`, `io.stdout:write`, and stderr writes through
+  the captured result stream while retaining the native file handles.
+
 These boundaries make Weblua suitable for examples, experiments, bug reproductions,
 and language comparisons—not long-running jobs or validation against a production
 Roblox environment.
@@ -147,7 +150,7 @@ long-lived caching and provides route fallback for `/playground` and `/embed`.
 For a complete hosted deployment walkthrough, see
 [`docs/coolify-deployment.md`](docs/coolify-deployment.md).
 
-## Upstream note: Luau JSPI `pcall`/`xpcall`
+## Upstream notes: Luau web bridge
 
 `luau-web@1.4.0` auto-selects its JSPI build in browsers that expose
 `WebAssembly.Suspending` and `WebAssembly.promising`. In that build, Luau runtime
@@ -160,6 +163,13 @@ Weblua avoids that path in
 This fixes Weblua's user-visible behavior, but it is a local workaround—not an
 upstream JSPI fix.
 
+The Asyncify build has a separate teardown issue: native maps keyed by
+`lua_State*` survive `luauClose`. If the allocator reuses that pointer, a later
+state can receive stale registry references, fail with `attempt to call a nil
+value`, and eventually abort the WebAssembly instance. Weblua gives every
+`LuauState` an isolated Asyncify instance, making repeated execution in a
+long-lived worker safe at the cost of repeating Luau initialization.
+
 The upstream JSPI target links with `-fwasm-exceptions`, while the protected-call
 implementation lives in the ordinary `Luau.VM` static library. A clean upstream
 fix would compile a separate `Luau.VM.JSPI` with native WebAssembly exceptions and
@@ -167,7 +177,8 @@ link `Luau.Web.JSPI` against it. The prepared reproduction and proposed patch sh
 are in [`docs/luau-web-pcall-issue.md`](docs/luau-web-pcall-issue.md).
 
 Once upstream publishes a fixed release, update `luau-web`, verify both protected
-call regressions in a JSPI-capable browser, and remove the Asyncify-only wrapper.
+call regressions in a JSPI-capable browser plus repeated state teardown, and remove
+the Asyncify-only wrapper.
 
 ## Production hooks
 

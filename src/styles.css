@@ -2187,6 +2187,16 @@ body[data-theme="light"] .orb {
 }
 
 @media (max-width: 880px) {
+  /* The domain notice is desktop-only. Zeroing the height keeps the nav, the
+     skip link, and every section scroll offset flush with the viewport top. */
+  :root {
+    --sale-banner-height: 0px;
+  }
+
+  .sale-banner {
+    display: none;
+  }
+
   .nav-links,
   .nav-cta {
     display: none;
@@ -2327,16 +2337,6 @@ body[data-theme="light"] .orb {
 }
 
 @media (max-width: 560px) {
-  :root {
-    --sale-banner-height: 52px;
-  }
-
-  .sale-banner {
-    flex-direction: column;
-    gap: 0;
-    padding-block: 6px;
-  }
-
   .feature-grid,
   .testimonial-grid,
   .pricing-grid,

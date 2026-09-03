@@ -24,32 +24,26 @@ type LuauRuntime = Omit<InternalLuauWasmModuleType, "states"> & {
   states: Array<Partial<RuntimeState> | null>;
 };
 
-const Luau = {
-  LUA_VALUE: Symbol("LuaValue"),
-  JS_VALUE: Symbol("JsValue"),
-  JS_MUTABLE: Symbol("JsMutable"),
-  securityTransmitList: new Map(),
-  options: new Map([["LUA_IMPLICIT_ARRAYS_TO_JS_ARRAYS", true]]),
-  states: []
-} as unknown as LuauRuntime;
+const LUA_VALUE = Symbol("LuaValue");
+const JS_VALUE = Symbol("JsValue");
+const JS_MUTABLE = Symbol("JsMutable");
 
-let initialized = false;
-let initPromise: Promise<boolean> | null = null;
+function createRuntimeSeed(): LuauRuntime {
+  return {
+    LUA_VALUE,
+    JS_VALUE,
+    JS_MUTABLE,
+    securityTransmitList: new Map(),
+    options: new Map([["LUA_IMPLICIT_ARRAYS_TO_JS_ARRAYS", true]]),
+    states: []
+  } as unknown as LuauRuntime;
+}
 
-// luau-web@1.4.0 auto-selects JSPI in modern browsers, but that build does not
-// catch Luau runtime errors inside pcall/xpcall. The Asyncify bundle does.
-async function ensureInitialized(): Promise<boolean> {
-  if (initPromise) return initPromise;
-  if (initialized) return true;
-
-  initPromise = (async () => {
-    const moduleInstance = await AsyncifyWasmModule(Luau);
-    Object.assign(Luau, moduleInstance);
-    initialized = true;
-    return true;
-  })();
-
-  return initPromise;
+async function createRuntime(): Promise<LuauRuntime> {
+  const runtime = createRuntimeSeed();
+  const moduleInstance = await AsyncifyWasmModule(runtime);
+  Object.assign(runtime, moduleInstance);
+  return runtime;
 }
 
 class CompileError extends Error {
@@ -65,7 +59,7 @@ function Mutable<T extends object>(object: T): Map<keyof T, T[keyof T]> & T {
       ? (object as Map<PropertyKey, unknown>)
       : new Map<PropertyKey, unknown>(Object.entries(object));
 
-  map.set(Luau.JS_MUTABLE, true);
+  map.set(JS_MUTABLE, true);
 
   const proxy = new Proxy(map, {
     get(target, prop, receiver) {
@@ -89,20 +83,26 @@ function Mutable<T extends object>(object: T): Map<keyof T, T[keyof T]> & T {
 class LuauState {
   destroyed = false;
   env!: LuauEnv;
+  private readonly runtime: LuauRuntime;
   state = 0;
   stateIdx: number;
 
   static async createAsync(initialEnv?: Record<string, unknown>): Promise<LuauState> {
-    await ensureInitialized();
-
-    const instance = new LuauState();
-    instance.state = await Luau._makeLuaState(instance.stateIdx);
-    instance.env = Luau.states[instance.stateIdx]?.env as LuauEnv;
+    // luau-web@1.4.0 leaves native maps keyed by lua_State* populated when a
+    // state closes. Reusing that WebAssembly instance lets a newly allocated
+    // state inherit stale registry references when its pointer is recycled.
+    // Keep each state in an isolated instance until upstream teardown clears
+    // those maps. This costs initialization time but permits safe worker reuse
+    // and still releases the complete instance after destroy/garbage collection.
+    const runtime = await createRuntime();
+    const instance = new LuauState(runtime);
+    instance.state = await runtime._makeLuaState(instance.stateIdx);
+    instance.env = runtime.states[instance.stateIdx]?.env as LuauEnv;
 
     if (initialEnv) {
       for (const [key, value] of Object.entries(initialEnv)) {
         if (!instance.env.set(key, value, true)) {
-          Luau.fprintwarn(`illegal state: lua globals key ${key} wasn't set`);
+          runtime.fprintwarn(`illegal state: lua globals key ${key} wasn't set`);
         }
       }
     }
@@ -110,14 +110,15 @@ class LuauState {
     return instance;
   }
 
-  constructor() {
-    if (!initialized) {
+  constructor(runtime?: LuauRuntime) {
+    if (!runtime) {
       throw new Error("Luau not initialized. Use LuauState.createAsync() instead of new LuauState()");
     }
 
-    Luau.states = Luau.states || [];
-    this.stateIdx = Luau.states.length + 1;
-    Luau.states[this.stateIdx] = {
+    this.runtime = runtime;
+    runtime.states = runtime.states || [];
+    this.stateIdx = runtime.states.length + 1;
+    runtime.states[this.stateIdx] = {
       luaValueCache: new Map(),
       jsValueCache: new Map(),
       jsValueReverse: new Map(),
@@ -129,31 +130,31 @@ class LuauState {
 
   getValue(idx: number): unknown {
     if (this.destroyed) {
-      throw new Luau.GlueError("Cannot use destroyed Luau state");
+      throw new this.runtime.GlueError("Cannot use destroyed Luau state");
     }
 
-    const transactionId = Luau._getLuaValue(this.state, idx);
+    const transactionId = this.runtime._getLuaValue(this.state, idx);
     let luauValue: unknown = null;
 
     try {
       luauValue = JSON.parse(
-        String(Luau.states[this.stateIdx]?.transactionData?.[transactionId])
+        String(this.runtime.states[this.stateIdx]?.transactionData?.[transactionId])
       );
     } catch {
       // Keep null for non-JSON transaction data, matching luau-web's wrapper.
     }
 
-    return Luau.luauToJsValue(this.stateIdx, this.state, luauValue);
+    return this.runtime.luauToJsValue(this.stateIdx, this.state, luauValue);
   }
 
   makeTransaction(value: unknown): number {
     if (this.destroyed) {
-      throw new Luau.GlueError("Cannot use destroyed Luau state");
+      throw new this.runtime.GlueError("Cannot use destroyed Luau state");
     }
 
-    const state = Luau.states[this.stateIdx];
+    const state = this.runtime.states[this.stateIdx];
     if (!state?.transactionData) {
-      throw new Luau.GlueError("Cannot use uninitialized Luau state");
+      throw new this.runtime.GlueError("Cannot use uninitialized Luau state");
     }
 
     const idx = state.nextTXKey ?? 0;
@@ -161,6 +162,20 @@ class LuauState {
     state.transactionData[idx] = value;
 
     return idx;
+  }
+
+  setOutputHandlers(
+    info: (...args: unknown[]) => void,
+    warn: (...args: unknown[]) => void = info,
+    error: (...args: unknown[]) => void = warn
+  ): void {
+    if (this.destroyed) {
+      throw new this.runtime.GlueError("Cannot use destroyed Luau state");
+    }
+
+    this.runtime.fprint = info;
+    this.runtime.fprintwarn = warn;
+    this.runtime.fprinterr = error;
   }
 
   loadstring(source: string, chunkname: string, throwOnCompilationError: true): LuauFunction;
@@ -175,10 +190,10 @@ class LuauState {
     throwOnCompilationError = false
   ): LuauFunction | string {
     if (this.destroyed) {
-      throw new Luau.GlueError("Cannot use destroyed Luau state");
+      throw new this.runtime.GlueError("Cannot use destroyed Luau state");
     }
 
-    const loadStatus = Luau._luauLoad(
+    const loadStatus = this.runtime._luauLoad(
       this.state,
       this.makeTransaction(source),
       this.makeTransaction(chunkname)
@@ -197,13 +212,13 @@ class LuauState {
 
   destroy(): void {
     if (this.destroyed) {
-      throw new Luau.GlueError("Cannot use destroyed Luau state");
+      throw new this.runtime.GlueError("Cannot use destroyed Luau state");
     }
 
     this.destroyed = true;
-    Luau.states[this.stateIdx] = null;
-    Luau._luauClose(this.state);
+    this.runtime.states[this.stateIdx] = null;
+    this.runtime._luauClose(this.state);
   }
 }
 
-export { CompileError, Luau as InternalLuauWasmModule, LuauState, Mutable };
+export { CompileError, LuauState, Mutable };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InternalLuauWasmModule, LuauState } from "./luauWebAsyncify";
+import { LuauState } from "./luauWebAsyncify";
 
 describe("luauWebAsyncify", () => {
   it("keeps running after pcall and xpcall handle Luau runtime errors", async () => {
@@ -9,9 +9,7 @@ describe("luauWebAsyncify", () => {
     try {
       const print = (...args: unknown[]) => lines.push(args.map(String).join("\t"));
 
-      InternalLuauWasmModule.fprint = print;
-      InternalLuauWasmModule.fprintwarn = print;
-      InternalLuauWasmModule.fprinterr = print;
+      state.setOutputHandlers(print);
       state.env.set("print", print, true);
 
       const run = state.loadstring(
@@ -40,5 +38,18 @@ describe("luauWebAsyncify", () => {
       'xpcall ok=false err=handled: [string "repro"]:6: xpcall boom',
       "still running"
     ]);
+  });
+
+  it("isolates sequential executed states from stale native references", async () => {
+    for (let iteration = 1; iteration <= 6; iteration += 1) {
+      const state = await LuauState.createAsync({});
+
+      try {
+        const run = state.loadstring(`return ${iteration}`, `run-${iteration}`, true);
+        await expect(run()).resolves.toEqual([iteration]);
+      } finally {
+        state.destroy();
+      }
+    }
   });
 });
