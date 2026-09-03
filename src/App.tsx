@@ -61,6 +61,7 @@ import type {
   Workspace
 } from "./lib/types";
 import {
+  hasStoredDraftHint,
   type StoredWorkspaceProject,
   workspaceStore
 } from "./lib/workspaceStore";
@@ -147,6 +148,20 @@ const lightEditorTheme = [
   syntaxHighlighting(defaultHighlightStyle)
 ];
 
+/**
+ * Whether restore() can still replace the document after the first paint.
+ *
+ * Painting the default project and then swapping in a share link or a saved
+ * draft moves the line-number gutter (its width tracks the line count), the
+ * file list, and everything the editor lays out below them -- the ~1.0 CLS
+ * the field data reports. Visitors with neither a hash nor a draft have
+ * nothing to swap in, so they skip the wait and keep their current LCP.
+ */
+function hasPendingRestore(isEmbed: boolean): boolean {
+  if (window.location.hash.length > 1) return true;
+  return !isEmbed && hasStoredDraftHint();
+}
+
 function defaultWorkspace(): Workspace {
   const project = projectForExample(defaultExample);
   return {
@@ -209,6 +224,9 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  // Constant for the life of the mount: the answer cannot change once the
+  // hash is read and restore() is in flight.
+  const [restorePending] = useState(() => hasPendingRestore(isEmbed));
   const [notice, setNotice] = useState<string | null>(null);
   const [copiedInput, setCopiedInput] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
@@ -226,19 +244,27 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
     let cancelled = false;
 
     const restore = async () => {
-      const shared = await readProjectShareHash(window.location.hash);
-      const [draft, savedProjects] = isEmbed
-        ? [null, [] as StoredWorkspaceProject[]]
-        : await Promise.all([workspaceStore.getDraft(), workspaceStore.listProjects()]);
+      try {
+        const shared = await readProjectShareHash(window.location.hash);
+        const [draft, savedProjects] = isEmbed
+          ? [null, [] as StoredWorkspaceProject[]]
+          : await Promise.all([workspaceStore.getDraft(), workspaceStore.listProjects()]);
 
-      if (cancelled) return;
-      if (shared) {
-        setWorkspace(workspaceFromProject(shared));
-      } else if (draft) {
-        setWorkspace(draft);
+        if (cancelled) return;
+        if (shared) {
+          setWorkspace(workspaceFromProject(shared));
+        } else if (draft) {
+          setWorkspace(draft);
+        }
+        setProjects(savedProjects);
+      } catch (error) {
+        // A truncated share hash throws while decoding. The default workspace
+        // is a fine fallback, but the editor now waits on this flag, so it has
+        // to be set on every path or a bad link renders an empty pane forever.
+        if (!cancelled) reportRuntimeError(error);
+      } finally {
+        if (!cancelled) setIsHydrated(true);
       }
-      setProjects(savedProjects);
-      setIsHydrated(true);
     };
 
     void restore();
@@ -638,6 +664,8 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
   const statusKind = isRunning ? "running" : result ? result.status : "idle";
   const filePaths = Object.keys(workspace.project.files);
   const activeNamedProject = projects.find((project) => project.id === workspace.activeProjectId);
+  /** Hold back content whose size a pending restore would change. */
+  const editorReady = isHydrated || !restorePending;
 
   return (
     <div className={isEmbed ? "app app-embed" : "app"}>
@@ -791,7 +819,7 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
                   <button className="icon-button text-icon" type="button" onClick={addFile} title="Add file" aria-label="Add file"><FilePlus2 size={16} /></button>
                 </div>
                 <div className="file-list">
-                  {filePaths.map((path) => (
+                  {editorReady && filePaths.map((path) => (
                     <button
                       key={path}
                       className={path === workspace.activeFile ? "file-item is-active" : "file-item"}
@@ -811,14 +839,18 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
                 </div>
               </nav>
               <div className="editor-host">
-                <CodeMirror
-                  value={activeCode}
-                  height="100%"
-                  theme={theme === "dark" ? darkEditorTheme : lightEditorTheme}
-                  extensions={editorExtensions}
-                  basicSetup={{ foldGutter: true, highlightActiveLine: true, lineNumbers: true }}
-                  onChange={updateActiveCode}
-                />
+                {editorReady ? (
+                  <CodeMirror
+                    value={activeCode}
+                    height="100%"
+                    theme={theme === "dark" ? darkEditorTheme : lightEditorTheme}
+                    extensions={editorExtensions}
+                    basicSetup={{ foldGutter: true, highlightActiveLine: true, lineNumbers: true }}
+                    onChange={updateActiveCode}
+                  />
+                ) : (
+                  <div className="editor-placeholder" aria-hidden="true" />
+                )}
               </div>
             </div>
           </section>

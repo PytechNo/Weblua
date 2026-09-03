@@ -176,8 +176,27 @@ export function projectForExample(example: PlaygroundExample): ProjectPayload {
     : projectFromSnippet(example);
 }
 
+/**
+ * projectForExample() rebuilds and re-validates a project on every call, and
+ * exampleMatchesProject() runs across the whole example list on every
+ * keystroke to decide whether the picker still reads "custom". Caching the
+ * comparison copies takes that off the typing path -- it was the bulk of the
+ * 456ms INP the field data attributes to .cm-content. Callers of
+ * projectForExample() still get a fresh, mutable project.
+ */
+const comparisonProjects = new WeakMap<PlaygroundExample, ProjectPayload>();
+
+function comparisonProject(example: PlaygroundExample): ProjectPayload {
+  let cached = comparisonProjects.get(example);
+  if (!cached) {
+    cached = projectForExample(example);
+    comparisonProjects.set(example, cached);
+  }
+  return cached;
+}
+
 export function exampleMatchesProject(example: PlaygroundExample, project: ProjectPayload): boolean {
-  const candidate = projectForExample(example);
+  const candidate = comparisonProject(example);
   const candidatePaths = Object.keys(candidate.files);
   const projectPaths = Object.keys(project.files);
 

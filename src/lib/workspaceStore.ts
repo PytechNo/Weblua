@@ -57,6 +57,37 @@ const DRAFT_STORE = "drafts";
 const PROJECT_STORE = "projects";
 const DRAFT_KEY = "recovery";
 const FALLBACK_PROJECT_NAME = "Untitled project";
+
+/**
+ * Synchronous "a draft probably exists" marker.
+ *
+ * The playground has to know before its first paint whether an async restore
+ * is going to replace what it renders; reading IndexedDB to find out would
+ * block that paint. localStorage is synchronous, so this hint costs nothing
+ * and only has to be right often enough to keep the no-draft path fast --
+ * getDraft() stays the source of truth. A stale hint costs one extra frame,
+ * never a wrong document.
+ */
+const DRAFT_HINT_KEY = "weblua:has-draft";
+
+/** Conservative: storage we cannot read is treated as "a draft may exist". */
+export function hasStoredDraftHint(): boolean {
+  try {
+    return window.localStorage.getItem(DRAFT_HINT_KEY) !== null;
+  } catch {
+    return true;
+  }
+}
+
+function setDraftHint(present: boolean): void {
+  try {
+    if (present) window.localStorage.setItem(DRAFT_HINT_KEY, "1");
+    else window.localStorage.removeItem(DRAFT_HINT_KEY);
+  } catch {
+    // A private-mode storage denial is not worth failing a draft write over.
+  }
+}
+
 interface DraftRecord {
   key: typeof DRAFT_KEY;
   workspace: Workspace;
@@ -124,6 +155,7 @@ class BrowserWorkspaceStore implements WorkspaceStore {
 
     return this.safely(async (backend) => {
       await backend.putDraft(copy);
+      setDraftHint(true);
       return true;
     }, false);
   }
@@ -131,6 +163,7 @@ class BrowserWorkspaceStore implements WorkspaceStore {
   async clearDraft(): Promise<boolean> {
     return this.safely(async (backend) => {
       await backend.deleteDraft();
+      setDraftHint(false);
       return true;
     }, false);
   }

@@ -1385,7 +1385,10 @@ body[data-theme="light"] .orb {
    ========================================================================== */
 
 .app {
-  min-height: 100dvh;
+  /* svh, not dvh: dvh tracks the mobile URL bar, so every collapse/expand
+     resized .workspace and shifted the whole panes grid under it. svh pins
+     the layout to the smallest viewport and never moves. */
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   background:
@@ -1442,6 +1445,7 @@ body[data-theme="light"] .orb {
 }
 
 .workspace {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -1747,7 +1751,18 @@ body[data-theme="light"] .orb {
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* A toast rather than a block in the flow. Every notice is raised from an
+   async handler -- share-link encode, project import, an IndexedDB write --
+   so it can land long after the click that caused it, outside the 500ms
+   grace CLS gives user input. In flow it pushed the entire panes grid down;
+   floated it costs no layout at all. */
 .notice {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100% - 32px));
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -1757,6 +1772,7 @@ body[data-theme="light"] .orb {
   border-radius: var(--radius-sm);
   color: var(--muted);
   background: linear-gradient(180deg, var(--glass), transparent), var(--surface);
+  box-shadow: var(--shadow-card);
   font-size: 13.5px;
   animation: notice-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -1764,11 +1780,11 @@ body[data-theme="light"] .orb {
 @keyframes notice-in {
   from {
     opacity: 0;
-    transform: translateY(-5px);
+    transform: translate(-50%, 6px);
   }
   to {
     opacity: 1;
-    transform: none;
+    transform: translate(-50%, 0);
   }
 }
 
@@ -1947,6 +1963,21 @@ body[data-theme="light"] .orb {
 .editor-host > div,
 .editor-pane .cm-editor {
   height: 100%;
+}
+
+/* CodeMirror sizes the line-number gutter from the widest number it holds,
+   so a document swap that crosses a digit boundary (99 -> 100 lines) widens
+   the gutter and pushes every line of code sideways. Reserving three digits
+   keeps loading an example or opening a project free of that jump. */
+.editor-pane .cm-lineNumbers .cm-gutterElement {
+  min-width: 3ch;
+}
+
+/* Occupies the editor host while a share link or draft is still resolving,
+   so the real editor mounts into a box that is already the right size. */
+.editor-placeholder {
+  height: 100%;
+  background: var(--surface);
 }
 
 .editor-pane .cm-editor {
@@ -2293,7 +2324,7 @@ body[data-theme="light"] .orb {
 
   .panes {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(330px, 52dvh) minmax(220px, 34dvh);
+    grid-template-rows: minmax(330px, 52svh) minmax(220px, 34svh);
   }
 
   .editor-workbench {
