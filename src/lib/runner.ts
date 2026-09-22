@@ -13,9 +13,14 @@ import {
 export interface RunOptions {
   /** Wall-clock budget for execution. Boot time is not charged against it. */
   timeoutMs?: number;
-  /** Receives output as the run produces it, ahead of the final result. */
+  /** Receives batched display updates during a run, ahead of the final result. */
   onOutput?: (chunks: OutputChunk[]) => void;
 }
+
+// Batch rendering on the page, whose timers still run while Lua is blocked.
+// Slow updates as output grows because the UI renders the full accumulated log.
+const OUTPUT_INTERVAL_MS = 60;
+const OUTPUT_INTERVAL_MAX_MS = 500;
 
 /**
  * A run in flight. Terminating the worker is the only way to interrupt wasm,
@@ -73,13 +78,28 @@ function startRun(request: RunRequest, options: RunOptions): RunHandle {
   // first run otherwise got noticeably less than its advertised seconds.
   let startedAt = performance.now();
   let timer = 0;
+  let outputTimer: number | undefined;
+  let pendingOutput: OutputChunk[] = [];
+
+  const flushOutput = () => {
+    window.clearTimeout(outputTimer);
+    outputTimer = undefined;
+    if (pendingOutput.length === 0) return;
+    const chunks = pendingOutput;
+    pendingOutput = [];
+    options.onOutput?.(chunks);
+  };
 
   const finish = (value: RunResult) => {
     if (settled) return;
     settled = true;
     window.clearTimeout(timer);
     worker.terminate();
-    settle(value);
+    try {
+      flushOutput();
+    } finally {
+      settle(value);
+    }
   };
 
   const cut = (status: "timeout" | "stopped", text: string) => {
@@ -103,6 +123,7 @@ function startRun(request: RunRequest, options: RunOptions): RunHandle {
   };
 
   worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+    if (settled) return;
     const message = event.data;
 
     if (isRunProgress(message)) {
@@ -113,8 +134,18 @@ function startRun(request: RunRequest, options: RunOptions): RunHandle {
         return;
       }
 
-      streamed.push(...message.chunks);
-      options.onOutput?.(message.chunks);
+      // Do not expand batches into function arguments: a large write can
+      // exceed the engine's argument limit even though the array fits in memory.
+      for (const chunk of message.chunks) {
+        streamed.push(chunk);
+        if (options.onOutput) pendingOutput.push(chunk);
+      }
+      if (pendingOutput.length > 0 && outputTimer === undefined) {
+        outputTimer = window.setTimeout(
+          flushOutput,
+          Math.min(OUTPUT_INTERVAL_MAX_MS, OUTPUT_INTERVAL_MS + streamed.length / 40)
+        );
+      }
       return;
     }
 

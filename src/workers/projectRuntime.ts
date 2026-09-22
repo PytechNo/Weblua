@@ -83,24 +83,8 @@ export type OutputPush = (kind: OutputChunk["kind"], values: unknown[]) => void;
 export interface RunObserver {
   /** Called once the wasm runtime is up and user code is about to execute. */
   executing?(): void;
-  /** Called with output chunks as they are produced, batched by time. */
+  /** Called synchronously as output is produced, before user code resumes. */
   chunk?(chunks: OutputChunk[]): void;
-}
-
-/**
- * Streaming cadence. Output is forwarded at most this often so a print-heavy
- * loop posts a handful of messages per second rather than one per line.
- *
- * The interval widens as output grows, because the page re-renders the whole
- * stream on each message: at a fixed 60ms a run printing tens of thousands of
- * lines would spend the rest of its budget being re-rendered. Sixteen updates
- * a second early on, roughly two once the output is long.
- */
-const STREAM_INTERVAL_MS = 60;
-const STREAM_INTERVAL_MAX_MS = 500;
-
-function streamInterval(emitted: number): number {
-  return Math.min(STREAM_INTERVAL_MAX_MS, STREAM_INTERVAL_MS + emitted / 40);
 }
 
 /**
@@ -158,26 +142,12 @@ export async function handleRun(
   let flavor = requestFlavor(request);
   let project: ProjectPayload | undefined;
 
-  // Chunks are kept for the final result and streamed to the host. The host
-  // drops what it streamed once the result lands, so holding both costs
-  // nothing and keeps a finished result self-contained.
-  let streamPending: OutputChunk[] = [];
-  let streamedAt = startedAt;
-
-  const stream = (force: boolean) => {
-    if (!observer?.chunk || streamPending.length === 0) return;
-    const now = performance.now();
-    if (!force && now - streamedAt < streamInterval(chunks.length)) return;
-    streamedAt = now;
-    observer.chunk(streamPending);
-    streamPending = [];
-  };
-
   const push: OutputPush = (kind, values) => {
     const chunk = { kind, text: values.map(formatValue).join("\t") };
     chunks.push(chunk);
-    streamPending.push(chunk);
-    stream(false);
+    // A timer in this worker cannot fire during a synchronous Lua loop.
+    // Transfer output before returning to user code; the host batches renders.
+    observer?.chunk?.([chunk]);
   };
 
   try {
@@ -185,7 +155,6 @@ export async function handleRun(
     project = normalized.project;
     flavor = project.flavor;
     await runProject(normalized, push, deps, observer);
-    stream(true);
 
     return {
       id: request.id,
@@ -195,7 +164,6 @@ export async function handleRun(
       chunks: chunks.length ? chunks : [{ kind: "system", text: "Finished with no output." }]
     };
   } catch (error) {
-    stream(true);
     const rawError = project ? normalizeProjectError(normalizeError(error), project) : normalizeError(error);
     return {
       id: request.id,

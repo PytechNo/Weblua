@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RUN_TIMEOUT_MS,
   EXTENDED_RUN_TIMEOUT_MS,
+  type OutputChunk,
   type ProjectPayload,
   type RunResult
 } from "../lib/types";
@@ -536,6 +537,52 @@ describe("diagnostic attribution", () => {
 
   it("matches a path that a runtime quoted instead of suffixing", () => {
     expect(findDiagnosticFile('module "lib/greet.lua" failed', sample)).toBe("lib/greet.lua");
+  });
+});
+
+describe("streaming before user code resumes", () => {
+  it("forwards each print synchronously before later code can block", async () => {
+    const streamed: OutputChunk[] = [];
+    const snapshots: OutputChunk[][] = [];
+    const globals = new Map<string, (...args: unknown[]) => void>();
+    const deps = {
+      ...failingDependencies,
+      lua54Factory: {
+        mountFile: async () => {},
+        createEngine: async () => ({
+          global: {
+            setMemoryMax() {},
+            set: (name: string, value: (...args: unknown[]) => void) => globals.set(name, value),
+            close() {}
+          },
+          doString: async () => {},
+          doFile: async () => {
+            globals.get("print")!("first");
+            snapshots.push(streamed.slice());
+            globals.get("warn")!("second");
+            // User code could enter an infinite loop at either snapshot.
+            snapshots.push(streamed.slice());
+          }
+        })
+      }
+    } as unknown as RuntimeDependencies;
+    // Both prints fall inside the former worker batching interval.
+    const now = vi.spyOn(performance, "now").mockReturnValue(0);
+    try {
+      const result = await handleRun(
+        { id: "stream", project: project({ "main.lua": "" }) },
+        deps,
+        { chunk: chunks => { for (const chunk of chunks) streamed.push(chunk); } }
+      );
+      expect(result.status).toBe("ok");
+      expect(snapshots).toEqual([
+        [{ kind: "stdout", text: "first" }],
+        [{ kind: "stdout", text: "first" }, { kind: "stderr", text: "second" }]
+      ]);
+      expect(result.chunks).toEqual(streamed);
+    } finally {
+      now.mockRestore();
+    }
   });
 });
 

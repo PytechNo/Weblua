@@ -3,6 +3,7 @@ import { runProject } from "./runner";
 import {
   DEFAULT_RUN_TIMEOUT_MS,
   EXTENDED_RUN_TIMEOUT_MS,
+  type OutputChunk,
   type ProjectPayload,
   type RunResult,
   type WorkerMessage
@@ -113,6 +114,66 @@ describe("run handles", () => {
     expect(textOf(result)[0]).toBe("printed");
     expect(textOf(result)[1]).toContain("Run stopped");
     expect(worker().terminated).toBe(true);
+  });
+
+  it("batches display updates and flushes even when the worker goes silent", async () => {
+    const onOutput = vi.fn();
+    const handle = runProject(project, "", { onOutput });
+    const chunks: OutputChunk[] = [
+      { kind: "stdout", text: "first" },
+      { kind: "stderr", text: "second" }
+    ];
+
+    worker().emit({ type: "started", id: handle.id });
+    for (const chunk of chunks) {
+      worker().emit({ type: "chunk", id: handle.id, chunks: [chunk] });
+    }
+    expect(onOutput).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(onOutput).toHaveBeenCalledExactlyOnceWith(chunks);
+    handle.stop();
+    expect((await handle.result).chunks.slice(0, -1)).toEqual(chunks);
+  });
+
+  it.each(["stopped", "timeout"] as const)("keeps a large batch when a run is %s", async (status) => {
+    const onOutput = vi.fn();
+    const handle = runProject(project, "", { onOutput });
+    const chunks: OutputChunk[] = Array.from({ length: 300001 }, (_, index) => ({
+      kind: "stdout", text: String(index)
+    }));
+
+    worker().emit({ type: "started", id: handle.id });
+    try {
+      worker().emit({ type: "chunk", id: handle.id, chunks });
+      if (status === "stopped") handle.stop();
+      else await vi.advanceTimersByTimeAsync(DEFAULT_RUN_TIMEOUT_MS);
+
+      const result = await handle.result;
+      expect(result.status).toBe(status);
+      expect(result.chunks).toHaveLength(chunks.length + 1);
+      expect(chunks.every((chunk, index) => result.chunks[index] === chunk)).toBe(true);
+      expect(onOutput).toHaveBeenCalledTimes(1);
+      expect(onOutput.mock.calls[0][0]).toHaveLength(chunks.length);
+    } finally {
+      handle.stop();
+    }
+  });
+
+  it("flushes display output on completion and ignores later progress", async () => {
+    const onOutput = vi.fn();
+    const handle = runProject(project, "", { onOutput });
+    const chunks: OutputChunk[] = [{ kind: "stdout", text: "done" }];
+    worker().emit({ type: "chunk", id: handle.id, chunks });
+    worker().emit({ id: handle.id, flavor: "lua54", status: "ok", durationMs: 1, chunks });
+
+    expect((await handle.result).chunks).toEqual(chunks);
+    expect(onOutput).toHaveBeenCalledExactlyOnceWith(chunks);
+    worker().emit({ type: "started", id: handle.id });
+    worker().emit({ type: "chunk", id: handle.id, chunks });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("ignores a second stop once the run has settled", async () => {

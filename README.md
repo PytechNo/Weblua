@@ -16,7 +16,7 @@ Roblox services, instances, globals, Studio tooling, or static type analysis.
 - `require("lib.module")`, `require("lib/module")`, and `init.lua` module aliases.
 - A compile-only **Check** action with per-file syntax diagnostics.
 - Preset stdin through `io.read()` in Lua and `read()` in Luau.
-- Captured stdout, stderr, status, and elapsed time after each run finishes.
+- Live stdout and stderr, with status and elapsed time after each run finishes.
 - Source-only share links and lazy-loading iframe embeds.
 - Recovery drafts and named projects stored in IndexedDB.
 - Source-only `.weblua.json` import and export.
@@ -46,8 +46,9 @@ and resolves modules through an in-VM browser-safe loader.
 The **Check** action only compiles every source file. For Luau, this verifies syntax;
 it does not invoke the Luau Analysis library or report static type errors.
 
-Output is collected inside the worker and returned when execution completes or
-fails. It is not streamed incrementally to the UI.
+Output is streamed from the worker as it is produced. The page batches display
+updates and keeps received output when a run is stopped or times out. Completed
+runs also return their full output with the final result.
 
 ## Sharing, embeds, and persistence
 
