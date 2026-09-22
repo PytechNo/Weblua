@@ -49,3 +49,37 @@ High-impact improvements to elevate the editing and developer experience in Webl
 - [ ] **Hover Documentation**:
   - Display markdown hover tooltips showing types and standard library docstrings when hovering over functions.
   
+---
+
+### 5. Runtime Stdlib & Roblox Preset (`task`, builtin modules)
+Rationale: Weblua currently ships no `task`, `Vector3`, `CFrame`, or `Instance` — the
+APIs Roblox developers reach for first. The engine work below is generic, so a
+Lune/Lute-compatible namespace becomes a thin veneer on top rather than its own
+project. Build it for the Roblox audience; get the standalone-runtime flavors free.
+
+- [ ] **Builtin module registry**:
+  - Extend `LUAU_REQUIRE_BOOTSTRAP` (`src/workers/projectRuntime.ts`) with a builtins
+    table consulted ahead of the `__weblua_module_aliases` lookup, so namespaced
+    requires (`@lune/fs`, `@std/fs`) resolve without touching the project VFS.
+- [ ] **`task` scheduler on Asyncify**:
+  - Implement `task.wait`, `task.spawn`, `task.defer`, `task.delay`, `task.cancel`
+    over the existing Asyncify build (`src/lib/luauWebAsyncify.ts`), which already
+    allows awaiting across the JS boundary.
+  - Ensure scheduled work respects the run timeout and streams output through the
+    existing `RunObserver` chunk path.
+- [ ] **VFS-backed `fs` module**:
+  - Reads map directly onto `ProjectPayload.files`; writes need a mutable in-memory
+    overlay that is discarded per run.
+- [ ] **`serde` / JSON**:
+  - JSON via native `JSON`; TOML/YAML need a JS library; compression via
+    `CompressionStream`.
+- [ ] **Roblox preset stubs**:
+  - `Vector3`, `CFrame`, `Instance.new`, and a minimal DataModel tree, gated behind a
+    preset toggle so plain Luau runs stay clean.
+- [ ] **Standalone-runtime namespace (veneer, only after the above)**:
+  - Expose `@lune/*` and/or `@std/*` aliases over the same implementations.
+  - Defer the choice of which brand to badge: Lune has the larger installed base and
+    script corpus but has been dark since 2026-07-03; Lute is the official
+    `luau-lang` runtime, 1.0 stable and actively developed.
+  - Unsupported calls (`net.serve`, `process.exec`, real fs writes) must `error()`
+    with a message explaining the browser limitation — never silently return `nil`.
