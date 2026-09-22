@@ -48,3 +48,4 @@ High-impact improvements to elevate the editing and developer experience in Webl
   - Integrate an in-browser formatter (e.g., StyLua or Luau formatting) with a "Format Code" shortcut (`Shift+Alt+F`).
 - [ ] **Hover Documentation**:
   - Display markdown hover tooltips showing types and standard library docstrings when hovering over functions.
+  
