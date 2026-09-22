@@ -243,7 +243,7 @@ describe.each(luaFlavors)("%s end-to-end execution", (flavor) => {
     );
 
     expect(result.status).toBe("ok");
-    // Lua 5.4 delivers each print as one chunk; 5.1-5.3 stream stdout bytes and
+    // Lua 5.4 delivers each print as one chunk; 5.1-5.3 and 5.5 stream stdout bytes and
     // therefore split the multi-line remainder at its newline.
     expect(stdoutOf(result).join("\n")).toBe("first\nsecond\nthird");
   });

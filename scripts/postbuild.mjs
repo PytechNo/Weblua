@@ -83,16 +83,16 @@ function routeHtml({ title, description, canonical, noindex }) {
 const routes = [
   {
     dir: "playground",
-    title: "Lua 5.1–5.4 &amp; Luau Online Playground — Weblua",
+    title: "Lua 5.1–5.5 &amp; Luau Online Playground — Weblua",
     description:
-      "Write, run, and share multi-file Lua 5.1–5.4 and Luau projects directly in your browser without an account or execution backend.",
+      "Write, run, and share multi-file Lua 5.1–5.5 and Luau projects directly in your browser without an account or execution backend.",
     canonical: "https://weblua.com/playground",
     noindex: false
   },
   {
     dir: "embed",
     title: "Weblua Embed — Runnable Lua &amp; Luau Project",
-    description: "An interactive source-only Lua 5.1–5.4 and Luau project embed powered by Weblua.",
+    description: "An interactive source-only Lua 5.1–5.5 and Luau project embed powered by Weblua.",
     canonical: "https://weblua.com/embed",
     noindex: true
   }
