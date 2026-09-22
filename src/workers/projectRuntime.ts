@@ -1,5 +1,6 @@
 import type { LuaFactory } from "wasmoon";
 import { parseCompileError } from "../lib/diagnostics";
+import { DEFAULT_RUN_TIMEOUT_MS } from "../lib/types";
 import type {
   CheckResult,
   Diagnostic,
@@ -22,6 +23,8 @@ export interface NormalizedRequest {
   project: ProjectPayload;
   stdin: string;
   activeFile?: string;
+  /** Wall-clock budget the host will enforce by terminating this worker. */
+  timeoutMs: number;
 }
 
 export interface StaticLuaGlue {
@@ -73,14 +76,51 @@ export interface RuntimeDependencies {
 export type OutputPush = (kind: OutputChunk["kind"], values: unknown[]) => void;
 
 /**
+ * Optional host hooks for a run in flight. A host that terminates a worker on
+ * a deadline needs both: "executing" tells it when to start counting, and
+ * "chunk" gives it output worth keeping when it does terminate.
+ */
+export interface RunObserver {
+  /** Called once the wasm runtime is up and user code is about to execute. */
+  executing?(): void;
+  /** Called with output chunks as they are produced, batched by time. */
+  chunk?(chunks: OutputChunk[]): void;
+}
+
+/**
+ * Streaming cadence. Output is forwarded at most this often so a print-heavy
+ * loop posts a handful of messages per second rather than one per line.
+ *
+ * The interval widens as output grows, because the page re-renders the whole
+ * stream on each message: at a fixed 60ms a run printing tens of thousands of
+ * lines would spend the rest of its budget being re-rendered. Sixteen updates
+ * a second early on, roughly two once the output is long.
+ */
+const STREAM_INTERVAL_MS = 60;
+const STREAM_INTERVAL_MAX_MS = 500;
+
+function streamInterval(emitted: number): number {
+  return Math.min(STREAM_INTERVAL_MAX_MS, STREAM_INTERVAL_MS + emitted / 40);
+}
+
+/**
+ * The engine-level budget, kept short of the host deadline so the runtime
+ * raises its own error -- which names a line -- before the worker is killed.
+ */
+export function engineTimeout(timeoutMs: number): number {
+  return Math.max(500, timeoutMs - 500);
+}
+
+/**
  * Runs or checks one request and resolves to the message a worker posts back.
  * Failures become results rather than exceptions so a request always answers.
  */
 export function processRequest(
   request: RunRequest,
-  deps: RuntimeDependencies
+  deps: RuntimeDependencies,
+  observer?: RunObserver
 ): Promise<RunResult | CheckResult> {
-  return request.mode === "check" ? handleCheck(request, deps) : handleRun(request, deps);
+  return request.mode === "check" ? handleCheck(request, deps) : handleRun(request, deps, observer);
 }
 
 export async function handleCheck(
@@ -110,25 +150,42 @@ export async function handleCheck(
 
 export async function handleRun(
   request: RunRequest,
-  deps: RuntimeDependencies
+  deps: RuntimeDependencies,
+  observer?: RunObserver
 ): Promise<RunResult> {
   const startedAt = performance.now();
   const chunks: OutputChunk[] = [];
   let flavor = requestFlavor(request);
   let project: ProjectPayload | undefined;
 
+  // Chunks are kept for the final result and streamed to the host. The host
+  // drops what it streamed once the result lands, so holding both costs
+  // nothing and keeps a finished result self-contained.
+  let streamPending: OutputChunk[] = [];
+  let streamedAt = startedAt;
+
+  const stream = (force: boolean) => {
+    if (!observer?.chunk || streamPending.length === 0) return;
+    const now = performance.now();
+    if (!force && now - streamedAt < streamInterval(chunks.length)) return;
+    streamedAt = now;
+    observer.chunk(streamPending);
+    streamPending = [];
+  };
+
   const push: OutputPush = (kind, values) => {
-    chunks.push({
-      kind,
-      text: values.map(formatValue).join("\t")
-    });
+    const chunk = { kind, text: values.map(formatValue).join("\t") };
+    chunks.push(chunk);
+    streamPending.push(chunk);
+    stream(false);
   };
 
   try {
     const normalized = normalizeRequest(request);
     project = normalized.project;
     flavor = project.flavor;
-    await runProject(normalized, push, deps);
+    await runProject(normalized, push, deps, observer);
+    stream(true);
 
     return {
       id: request.id,
@@ -138,6 +195,7 @@ export async function handleRun(
       chunks: chunks.length ? chunks : [{ kind: "system", text: "Finished with no output." }]
     };
   } catch (error) {
+    stream(true);
     const rawError = project ? normalizeProjectError(normalizeError(error), project) : normalizeError(error);
     return {
       id: request.id,
@@ -156,13 +214,16 @@ export async function handleRun(
 }
 
 export function normalizeRequest(request: RunRequest): NormalizedRequest {
+  const timeoutMs = normalizeTimeout(request.timeoutMs);
+
   if ("project" in request) {
     return {
       id: request.id,
       mode: request.mode ?? "run",
       project: validateProject(request.project),
       stdin: typeof request.stdin === "string" ? request.stdin : "",
-      activeFile: request.activeFile
+      activeFile: request.activeFile,
+      timeoutMs
     };
   }
 
@@ -176,8 +237,17 @@ export function normalizeRequest(request: RunRequest): NormalizedRequest {
       entry,
       files: { [entry]: request.code }
     },
-    stdin: ""
+    stdin: "",
+    timeoutMs
   };
+}
+
+/** A missing or nonsensical budget falls back to the default rather than
+ * leaving a runtime with no engine-level timeout at all. */
+function normalizeTimeout(timeoutMs: unknown): number {
+  return typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? timeoutMs
+    : DEFAULT_RUN_TIMEOUT_MS;
 }
 
 export function requestFlavor(request: RunRequest): RuntimeFlavor {
@@ -259,17 +329,18 @@ export async function checkProject(
 export async function runProject(
   request: NormalizedRequest,
   push: OutputPush,
-  deps: RuntimeDependencies
+  deps: RuntimeDependencies,
+  observer?: RunObserver
 ): Promise<void> {
   switch (request.project.flavor) {
     case "lua54":
-      return runLua54(request, push, deps);
+      return runLua54(request, push, deps, observer);
     case "luau":
-      return runLuau(request, push, deps);
+      return runLuau(request, push, deps, observer);
     case "lua51":
     case "lua52":
     case "lua53":
-      return runStaticLua(request, push, deps);
+      return runStaticLua(request, push, deps, observer);
   }
 }
 
@@ -294,10 +365,11 @@ async function checkLua54(project: ProjectPayload, deps: RuntimeDependencies): P
 async function runLua54(
   request: NormalizedRequest,
   push: OutputPush,
-  deps: RuntimeDependencies
+  deps: RuntimeDependencies,
+  observer?: RunObserver
 ): Promise<void> {
   const engine = await deps.lua54Factory.createEngine({
-    functionTimeout: 4500,
+    functionTimeout: engineTimeout(request.timeoutMs),
     traceAllocations: true
   });
   const reader = createStdinReader(request.stdin);
@@ -330,6 +402,7 @@ async function runLua54(
       await deps.lua54Factory.mountFile(`${root}/${path}`, source);
     }
 
+    observer?.executing?.();
     await engine.doString(buildLua54Bootstrap(root));
     await engine.doFile(`${root}/${request.project.entry}`);
   } finally {
@@ -454,7 +527,8 @@ async function checkStaticLua(
 async function runStaticLua(
   request: NormalizedRequest,
   push: OutputPush,
-  deps: RuntimeDependencies
+  deps: RuntimeDependencies,
+  observer?: RunObserver
 ): Promise<void> {
   const reader = createByteReader(request.stdin);
   const stdout = createByteSink("stdout", push);
@@ -468,6 +542,7 @@ async function runStaticLua(
   });
 
   try {
+    observer?.executing?.();
     const error = executeStaticLua(runtime, buildStaticProjectBootstrap(request.project));
     if (error) {
       throw new Error(normalizeProjectError(error, request.project));
@@ -665,13 +740,15 @@ export async function loadLuauModule(): Promise<LuauModule> {
 async function runLuau(
   request: NormalizedRequest,
   push: OutputPush,
-  deps: RuntimeDependencies
+  deps: RuntimeDependencies,
+  observer?: RunObserver
 ): Promise<void> {
   const { LuauState } = await resolveLuauModule(deps);
   const state = await LuauState.createAsync({});
   const reader = createStdinReader(request.stdin);
 
   try {
+    observer?.executing?.();
     const print = (...args: unknown[]) => push("stdout", args);
     const warn = (...args: unknown[]) => push("stderr", args);
 

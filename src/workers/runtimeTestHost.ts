@@ -7,6 +7,7 @@ import type { CheckResult, ProjectPayload, RunResult } from "../lib/types";
 import {
   asStaticLuaGlueFactory,
   processRequest,
+  type RunObserver,
   type RuntimeDependencies,
   type StaticLuaAssets,
   type StaticLuaFlavor
@@ -48,10 +49,15 @@ export const testDependencies: RuntimeDependencies = {
 };
 
 /** Fresh per request, exactly as runner.ts and checker.ts do in the app. */
-export async function runProjectForTest(project: ProjectPayload, stdin = ""): Promise<RunResult> {
+export async function runProjectForTest(
+  project: ProjectPayload,
+  stdin = "",
+  observer?: RunObserver
+): Promise<RunResult> {
   return (await processRequest(
     { id: crypto.randomUUID(), project, stdin },
-    testDependencies
+    testDependencies,
+    observer
   )) as RunResult;
 }
 

@@ -3,11 +3,12 @@ import wasmoonWasmUrl from "wasmoon/dist/glue.wasm?url";
 import {
   asStaticLuaGlueFactory,
   processRequest,
+  type RunObserver,
   type RuntimeDependencies,
   type StaticLuaAssets,
   type StaticLuaFlavor
 } from "./projectRuntime";
-import type { RunRequest } from "../lib/types";
+import type { RunProgress, RunRequest } from "../lib/types";
 
 const ctx: Worker = self as unknown as Worker;
 
@@ -21,8 +22,25 @@ const browserDependencies: RuntimeDependencies = {
 };
 
 ctx.onmessage = async (event: MessageEvent<RunRequest>) => {
-  ctx.postMessage(await processRequest(event.data, browserDependencies));
+  const request = event.data;
+  ctx.postMessage(await processRequest(request, browserDependencies, runObserver(request)));
 };
+
+/**
+ * Progress is only useful for runs: a check compiles without executing and
+ * produces no output. Posting during a run matters even when the worker is
+ * blocked in synchronous Lua, because each postMessage is queued on the page
+ * as it is called rather than when this worker next yields.
+ */
+function runObserver(request: RunRequest): RunObserver | undefined {
+  if (request.mode === "check") return undefined;
+
+  const post = (message: RunProgress) => ctx.postMessage(message);
+  return {
+    executing: () => post({ type: "started", id: request.id }),
+    chunk: (chunks) => post({ type: "chunk", id: request.id, chunks })
+  };
+}
 
 async function loadStaticLuaAssets(flavor: StaticLuaFlavor): Promise<StaticLuaAssets> {
   const [module, wasmUrl] = await Promise.all([

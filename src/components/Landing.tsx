@@ -182,7 +182,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: "In-browser execution",
-    body: "Lua and Luau run in a dedicated Web Worker through WebAssembly. A five-second timeout stops runaway programs without freezing the page."
+    body: "Lua and Luau run in a dedicated Web Worker through WebAssembly. Output streams as it is printed, Stop ends a run on the spot, and a five-second limit — thirty with long runs on — catches the ones that never end."
   },
   {
     icon: Braces,
@@ -207,7 +207,7 @@ const FEATURES = [
   {
     icon: Keyboard,
     title: "Keyboard-first",
-    body: "Ctrl+Enter to run, full CodeMirror editing with folding, bracket matching, and syntax highlighting tuned for Lua."
+    body: "Ctrl+Enter to run, Esc to stop a run in progress, full CodeMirror editing with folding, bracket matching, and syntax highlighting tuned for Lua."
   }
 ] as const;
 
@@ -218,7 +218,7 @@ const STEPS = [
   },
   {
     title: "Run",
-    body: "A Web Worker runs the selected runtime. When the run finishes—or reaches the five-second timeout—the output pane shows stdout, stderr, status, and elapsed time."
+    body: "A Web Worker runs the selected runtime and the output pane fills line by line as your code prints. Stop it whenever you like, or let the time limit end it—either way you keep the output and the elapsed time."
   },
   {
     title: "Share",
@@ -240,14 +240,14 @@ const BOUNDARIES = [
   {
     title: "Purposefully bounded runs",
     body:
-      "Runs stop after five seconds. Lua 5.4 also has a 32 MiB runtime memory cap, and URL sharing has a 32 KiB encoded limit; larger projects can be exported instead."
+      "Runs stop after five seconds, or thirty with long runs on, and whatever printed first is kept. Lua 5.4 also has a 32 MiB runtime memory cap, and URL sharing has a 32 KiB encoded limit; larger projects can be exported instead."
   }
 ] as const;
 
 const FAQS = [
   {
     q: "Is Weblua really free?",
-    a: "Yes. The hosted playground has no account or server-side run quota, and the source is MIT licensed. Individual runs stop after five seconds, and source links have a 32 KiB encoded-size limit."
+    a: "Yes. The hosted playground has no account or server-side run quota, and the source is MIT licensed. Individual runs stop after five seconds, or thirty with long runs on, and source links have a 32 KiB encoded-size limit."
   },
   {
     q: "Does my code get sent to an execution server?",
@@ -488,8 +488,8 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
           </ul>
           <dl className="stats reveal" style={{ transitionDelay: "140ms" }}>
             <div className="stat">
-              <dt>Run timeout</dt>
-              <dd>5 s</dd>
+              <dt>Run limit</dt>
+              <dd>5 s / 30 s</dd>
             </div>
             <div className="stat">
               <dt>Runtimes</dt>
@@ -596,13 +596,13 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                   </p>
                   <ul className="check-list">
                     <li>
-                      <Check size={15} /> stdout, stderr, and timing per run
+                      <Check size={15} /> stdout and stderr stream in as they are printed
                     </li>
                     <li>
-                      <Check size={15} /> Worker isolation and a five-second execution timeout
+                      <Check size={15} /> Stop any run and keep what it printed
                     </li>
                     <li>
-                      <Check size={15} /> Ctrl+Enter to start another run
+                      <Check size={15} /> Ctrl+Enter to run, Esc to stop
                     </li>
                   </ul>
                 </div>
@@ -839,7 +839,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
               </a>
             </div>
             <small className="cta-hint">
-              <Gauge size={13} /> Every run is capped at five seconds to protect the tab
+              <Gauge size={13} /> Stop any run and keep its output — or give it 30 seconds with long runs
             </small>
           </div>
         </section>

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ProjectPayload, RunResult } from "../lib/types";
+import {
+  DEFAULT_RUN_TIMEOUT_MS,
+  EXTENDED_RUN_TIMEOUT_MS,
+  type ProjectPayload,
+  type RunResult
+} from "../lib/types";
 import {
   buildLua54Bootstrap,
   buildModuleAliases,
@@ -10,6 +15,7 @@ import {
   createStdinReader,
   createTextSink,
   diagnosticFromError,
+  engineTimeout,
   findDiagnosticFile,
   formatValue,
   handleRun,
@@ -54,8 +60,35 @@ describe("request normalization", () => {
       mode: "run",
       project: { flavor: "lua54", entry: "main.lua", files: { "main.lua": "print(1)" } },
       stdin: "input",
-      activeFile: "main.lua"
+      activeFile: "main.lua",
+      timeoutMs: DEFAULT_RUN_TIMEOUT_MS
     });
+  });
+
+  it("carries an explicit execution budget through", () => {
+    const normalized = normalizeRequest({
+      id: "abc",
+      project: project({ "main.lua": "" }),
+      timeoutMs: EXTENDED_RUN_TIMEOUT_MS
+    });
+
+    expect(normalized.timeoutMs).toBe(EXTENDED_RUN_TIMEOUT_MS);
+  });
+
+  it("falls back to the default budget when one is missing or nonsensical", () => {
+    const base = { id: "abc", project: project({ "main.lua": "" }) };
+
+    expect(normalizeRequest(base).timeoutMs).toBe(DEFAULT_RUN_TIMEOUT_MS);
+    expect(normalizeRequest({ ...base, timeoutMs: 0 }).timeoutMs).toBe(DEFAULT_RUN_TIMEOUT_MS);
+    expect(normalizeRequest({ ...base, timeoutMs: Number.NaN }).timeoutMs).toBe(DEFAULT_RUN_TIMEOUT_MS);
+  });
+
+  it("keeps the engine budget short of the host deadline, with a floor", () => {
+    expect(engineTimeout(DEFAULT_RUN_TIMEOUT_MS)).toBe(4500);
+    expect(engineTimeout(EXTENDED_RUN_TIMEOUT_MS)).toBe(29500);
+    // A budget too small to subtract from still has to leave the engine time
+    // to raise its own error rather than none at all.
+    expect(engineTimeout(200)).toBe(500);
   });
 
   it("defaults a missing mode to run and missing input to an empty string", () => {

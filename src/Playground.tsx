@@ -20,12 +20,14 @@ import {
   RotateCcw,
   Save,
   ShieldCheck,
+  Square,
   Sun,
+  Timer,
   Trash2,
   Upload,
   X
 } from "lucide-react";
-import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitHubMark, MoonMark } from "./components/Brand";
 import { SwapLabel } from "./components/SwapLabel";
 import { checkProject } from "./lib/checker";
@@ -50,8 +52,9 @@ import {
   setProjectEntry,
   upsertProjectFile
 } from "./lib/project";
-import { runProject } from "./lib/runner";
+import { runProject, type RunHandle } from "./lib/runner";
 import { reportRuntimeError, trackEvent } from "./lib/telemetry";
+import { DEFAULT_RUN_TIMEOUT_MS, EXTENDED_RUN_TIMEOUT_MS } from "./lib/types";
 import type {
   OutputChunk,
   ProjectPayload,
@@ -199,6 +202,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const [projects, setProjects] = useState<StoredWorkspaceProject[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  /** Off: five seconds per run. On: thirty, for benchmarks and heavy loops. */
+  const [longRuns, setLongRuns] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   // Constant for the life of the mount: the answer cannot change once the
@@ -212,6 +217,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const importRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const skipNextAutosave = useRef(false);
+  /** The run in flight, so Stop and unmount can end it. Null when idle. */
+  const runRef = useRef<RunHandle | null>(null);
   /** Latest workspace for callbacks that must not be rebuilt per keystroke. */
   const workspaceRef = useRef(workspace);
 
@@ -284,33 +291,64 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   }, []);
 
   const execute = useCallback(async () => {
+    if (runRef.current) return;
+
+    const flavor = workspace.project.flavor;
+    const timeoutMs = longRuns ? EXTENDED_RUN_TIMEOUT_MS : DEFAULT_RUN_TIMEOUT_MS;
     setIsRunning(true);
     setNotice(null);
-    setResult({
-      id: "pending",
-      flavor: workspace.project.flavor,
-      status: "ok",
-      durationMs: 0,
-      chunks: [{ kind: "system", text: "Running..." }]
-    });
 
     try {
-      const nextResult = await runProject(workspace.project, workspace.stdin);
+      // Output is accumulated outside state: several worker messages can
+      // arrive between renders, and each one needs the full list so far.
+      let live: OutputChunk[] = [];
+      const handle = runProject(workspace.project, workspace.stdin, {
+        timeoutMs,
+        onOutput: (chunks) => {
+          live = [...live, ...chunks];
+          setResult({ id: handle.id, flavor, status: "ok", durationMs: 0, chunks: live });
+        }
+      });
+      runRef.current = handle;
+
+      // The same id as the result that will replace this, so the output pane
+      // stays mounted for the whole run instead of remounting at the end.
+      setResult({
+        id: handle.id,
+        flavor,
+        status: "ok",
+        durationMs: 0,
+        chunks: [{ kind: "system", text: "Running..." }]
+      });
+
+      const nextResult = await handle.result;
       setResult(nextResult);
-      trackEvent("run", { flavor: workspace.project.flavor, status: nextResult.status });
+      trackEvent("run", { flavor, status: nextResult.status, timeoutMs });
     } catch (error) {
       reportRuntimeError(error);
       setResult({
         id: "failed",
-        flavor: workspace.project.flavor,
+        flavor,
         status: "error",
         durationMs: 0,
         chunks: [{ kind: "stderr", text: error instanceof Error ? error.message : String(error) }]
       });
     } finally {
+      runRef.current = null;
       setIsRunning(false);
     }
-  }, [workspace]);
+  }, [longRuns, workspace]);
+
+  /**
+   * Ends the run and keeps what it printed. The handle resolves a "stopped"
+   * result, so the awaiting execute() finishes on its normal path.
+   */
+  const stopRun = useCallback(() => {
+    runRef.current?.stop();
+  }, []);
+
+  // A worker outlives the component that started it unless it is terminated.
+  useEffect(() => () => runRef.current?.stop(), []);
 
   const runCheck = useCallback(async () => {
     setIsChecking(true);
@@ -355,12 +393,20 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
         } else {
           void execute();
         }
+        return;
+      }
+
+      // Escape only does anything mid-run, so it stays out of the way of the
+      // editor and the dialogs the rest of the time.
+      if (event.key === "Escape" && runRef.current) {
+        event.preventDefault();
+        stopRun();
       }
     };
 
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [execute, runCheck]);
+  }, [execute, runCheck, stopRun]);
 
   /**
    * The lint source reads the workspace through a ref rather than closing over
@@ -760,10 +806,35 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
           )}
 
           <div className="toolbar-actions">
-            <button className="button button-primary" type="button" onClick={execute} disabled={isRunning}>
-              <Play size={16} />
-              <SwapLabel widest="Running">{isRunning ? "Running" : "Run"}</SwapLabel>
-              <kbd className="run-kbd" aria-hidden="true">Ctrl ↵</kbd>
+            <button
+              className={isRunning ? "button button-primary is-running" : "button button-primary"}
+              type="button"
+              onClick={isRunning ? stopRun : execute}
+              title={
+                isRunning
+                  ? "Stop this run and keep its output (Esc)"
+                  : "Run the project (Ctrl+Enter)"
+              }
+            >
+              {isRunning ? <Square size={13} /> : <Play size={16} />}
+              <SwapLabel widest="Stop">{isRunning ? "Stop" : "Run"}</SwapLabel>
+              <kbd className="run-kbd" aria-hidden="true">
+                <SwapLabel widest="Ctrl ↵">{isRunning ? "Esc" : "Ctrl ↵"}</SwapLabel>
+              </kbd>
+            </button>
+            <button
+              className={longRuns ? "button button-toggle is-on" : "button button-toggle"}
+              type="button"
+              aria-pressed={longRuns}
+              onClick={() => setLongRuns((on) => !on)}
+              title={
+                longRuns
+                  ? "Long runs on: each run gets 30 seconds"
+                  : "Long runs off: each run gets 5 seconds. Turn on for benchmarks and heavy loops."
+              }
+            >
+              <Timer size={15} />
+              <SwapLabel widest="30 s">{longRuns ? "30 s" : "5 s"}</SwapLabel>
             </button>
             <button className="button" type="button" onClick={runCheck} disabled={isChecking} title="Compile all files without running (Ctrl+Shift+Enter)">
               <ShieldCheck size={16} />
@@ -870,8 +941,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
               </button>
               <button className="icon-button text-icon" type="button" onClick={() => setResult(null)} title="Clear output" aria-label="Clear output"><Trash2 size={16} /></button>
             </div>
-            {/* Keyed so a new result remounts the stream and replays its one enter animation. */}
-            <OutputView key={result?.id ?? "empty"} chunks={result?.chunks ?? []} />
+            {/* Keyed by run, not by message: the pending, streamed, and final
+                results share an id, so the stream mounts once per run and replays
+                its enter animation only when a new run starts. */}
+            <OutputView key={result?.id ?? "empty"} chunks={result?.chunks ?? []} isRunning={isRunning} />
             {inputOpen && (
               <section className="input-drawer" aria-label="Preset standard input">
                 <label htmlFor="stdin-input">Input <span>{workspace.project.flavor === "luau" ? "read()" : "io.read()"}</span></label>
@@ -921,12 +994,28 @@ function ProjectLibrary({ projects, activeProjectId, activeName, onClose, onNew,
   );
 }
 
-function OutputView({ chunks }: { chunks: OutputChunk[] }) {
+function OutputView({ chunks, isRunning }: { chunks: OutputChunk[]; isRunning: boolean }) {
+  const streamRef = useRef<HTMLPreElement>(null);
+  const pinnedRef = useRef(true);
+
+  // Follow a streaming run, but stop following the moment the reader scrolls
+  // up: mid-run is exactly when someone wants to read what already printed.
+  useEffect(() => {
+    const stream = streamRef.current;
+    if (!stream || !isRunning || !pinnedRef.current) return;
+    stream.scrollTop = stream.scrollHeight;
+  }, [chunks, isRunning]);
+
   if (chunks.length === 0) {
     return <div className="empty-output"><p>Press Run — or Ctrl+Enter — to see stdout, stderr, and timing here.</p></div>;
   }
 
-  return <pre className="output-stream">{chunks.map((chunk, index) => <span className={`output-line output-${chunk.kind}`} key={`${chunk.kind}-${index}`}>{chunk.text}{"\n"}</span>)}</pre>;
+  const trackPin = (event: UIEvent<HTMLPreElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    pinnedRef.current = scrollHeight - scrollTop - clientHeight < 24;
+  };
+
+  return <pre className="output-stream" ref={streamRef} onScroll={trackPin}>{chunks.map((chunk, index) => <span className={`output-line output-${chunk.kind}`} key={`${chunk.kind}-${index}`}>{chunk.text}{"\n"}</span>)}</pre>;
 }
 
 function formatRunMeta(result: RunResult): string {

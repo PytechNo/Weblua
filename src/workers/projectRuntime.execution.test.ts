@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import capabilityTour from "../../examples/weblua-capability-tour.weblua.json";
 import { examples, projectForExample } from "../lib/examples";
-import type { ProjectPayload } from "../lib/types";
+import type { OutputChunk, ProjectPayload } from "../lib/types";
 import {
   checkProjectForTest as check,
   runProjectForTest as run,
@@ -50,6 +50,50 @@ describe.each(luaFlavors)("%s end-to-end execution", (flavor) => {
     expect(result.status).toBe("ok");
     expect(result.flavor).toBe(flavor);
     expect(stdoutOf(result)).toEqual(["hello, ada", "weblua"]);
+  });
+
+  /**
+   * The host terminates the worker to enforce a deadline, so anything not
+   * already streamed dies with it. This is the guarantee that a stopped or
+   * timed-out run can still show what it printed.
+   */
+  it("streams output to an observer and announces when user code begins", async () => {
+    const streamed: OutputChunk[] = [];
+    let executingCalls = 0;
+    let chunksBeforeExecuting = -1;
+
+    const result = await run(portableProject(flavor), "ada\n", {
+      executing: () => {
+        executingCalls += 1;
+        chunksBeforeExecuting = streamed.length;
+      },
+      chunk: (chunks) => streamed.push(...chunks)
+    });
+
+    expect(executingCalls).toBe(1);
+    // Announced after the runtime loads but before a line can be printed, so
+    // wasm boot is never charged to the execution budget.
+    expect(chunksBeforeExecuting).toBe(0);
+    expect(streamed.map((chunk) => chunk.text)).toEqual(["hello, ada", "weblua"]);
+    // The final result stays self-contained even though the same output was
+    // streamed: the host replaces what it streamed when the result lands.
+    expect(result.chunks).toEqual(streamed);
+  });
+
+  it("streams the output a failing run produced before it threw", async () => {
+    const streamed: OutputChunk[] = [];
+    const result = await run(
+      {
+        flavor,
+        entry: "main.lua",
+        files: { "main.lua": 'print("before")\nerror("boom")' }
+      },
+      "",
+      { chunk: (chunks) => streamed.push(...chunks) }
+    );
+
+    expect(result.status).toBe("error");
+    expect(streamed.map((chunk) => chunk.text)).toEqual(["before"]);
   });
 
   it("reports Finished with no output when a project prints nothing", async () => {

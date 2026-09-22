@@ -1729,6 +1729,34 @@ body[data-theme="light"] .orb {
   box-shadow: 0 10px 24px -8px rgba(91, 124, 255, 0.8);
 }
 
+.button-primary.is-running {
+  background: linear-gradient(120deg, var(--danger), var(--violet));
+  box-shadow: 0 6px 18px -8px rgba(255, 123, 134, 0.7);
+}
+
+.button-primary.is-running:hover {
+  background: linear-gradient(120deg, var(--danger), var(--danger));
+  box-shadow: 0 10px 24px -8px rgba(255, 123, 134, 0.8);
+}
+
+/* The run-length toggle. Its pressed state has to read at a glance: it is the
+   difference between a five-second run and a thirty-second one. */
+.button-toggle {
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.button-toggle.is-on {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  background: color-mix(in srgb, var(--primary) 12%, var(--button));
+  color: var(--text);
+}
+
+.button-toggle.is-on:hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 18%, var(--button));
+}
+
 /* Both states stack in the one grid cell, so the slot is always as wide as
    the longer word and a swap costs no layout. See SwapLabel in App.tsx. */
 .swap-label {
@@ -2039,6 +2067,10 @@ body[data-theme="light"] .orb {
 .status-dot.status-timeout {
   background: var(--danger);
   box-shadow: 0 0 10px rgba(255, 123, 134, 0.55);
+}
+
+.status-dot.status-stopped {
+  background: var(--muted);
 }
 
 .status-dot.status-running {

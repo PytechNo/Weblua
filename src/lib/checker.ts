@@ -1,4 +1,11 @@
-import type { CheckResult, ProjectPayload, RunRequest, RuntimeFlavor } from "./types";
+import {
+  isRunProgress,
+  type CheckResult,
+  type ProjectPayload,
+  type RunRequest,
+  type RuntimeFlavor,
+  type WorkerMessage
+} from "./types";
 
 const CHECK_TIMEOUT_MS = 4000;
 
@@ -23,7 +30,11 @@ function getWorker(): Worker {
     type: "module"
   });
 
-  worker.onmessage = (event: MessageEvent<CheckResult>) => {
+  worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+    // Checks never stream, but this worker is the run worker's module and a
+    // stray progress message must not be mistaken for a result.
+    if (isRunProgress(event.data) || !("diagnostics" in event.data)) return;
+
     const resolve = pending.get(event.data.id);
     if (resolve) {
       pending.delete(event.data.id);

@@ -34,6 +34,8 @@ export interface OutputChunk {
 export interface LegacyRunRequest extends SnippetPayload {
   id: string;
   mode?: "run" | "check";
+  /** Wall-clock budget for execution. Defaults to DEFAULT_RUN_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 export interface ProjectRunRequest {
@@ -44,6 +46,8 @@ export interface ProjectRunRequest {
   /** File whose editor diagnostics should be surfaced first. */
   activeFile?: string;
   mode?: "run" | "check";
+  /** Wall-clock budget for execution. Defaults to DEFAULT_RUN_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 /**
@@ -52,7 +56,33 @@ export interface ProjectRunRequest {
  */
 export type RunRequest = LegacyRunRequest | ProjectRunRequest;
 
-export type RunStatus = "ok" | "error" | "timeout";
+/** "stopped" is a run the user ended; "timeout" is one the budget ended. */
+export type RunStatus = "ok" | "error" | "timeout" | "stopped";
+
+/** Default execution budget. Long-run mode trades it for the extended one. */
+export const DEFAULT_RUN_TIMEOUT_MS = 5000;
+export const EXTENDED_RUN_TIMEOUT_MS = 30000;
+
+/**
+ * Messages a run worker posts before its final result.
+ *
+ * "started" fires once the runtime is loaded and user code is about to
+ * execute, so wasm boot time is not charged to the execution budget. "chunk"
+ * forwards output as it is produced, which is what lets a stopped or timed-out
+ * run still show everything it printed; that output previously died with the
+ * terminated worker, exactly when it was most worth reading.
+ *
+ * Only runs emit progress; checks post a single result.
+ */
+export type RunProgress =
+  | { type: "started"; id: string }
+  | { type: "chunk"; id: string; chunks: OutputChunk[] };
+
+export type WorkerMessage = RunProgress | RunResult | CheckResult;
+
+export function isRunProgress(message: WorkerMessage): message is RunProgress {
+  return "type" in message;
+}
 
 export interface Diagnostic {
   /** 1-based source line the compiler reported. */

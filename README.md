@@ -75,7 +75,10 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
 
 ## Runtime boundaries
 
-- Runs stop after five seconds by terminating the worker.
+- Runs stop after five seconds -- thirty with long runs enabled -- by terminating
+  the worker. Output is streamed to the page as it is produced, so a run that is
+  stopped or times out still shows everything it printed.
+- Stop ends a run immediately, from the toolbar or with Esc.
 - Lua 5.4 has a 32 MiB runtime memory cap.
 - URL sharing has a 32 KiB encoded-payload cap.
 - The Luau runtime does not include Roblox APIs or a static type checker.
