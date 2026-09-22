@@ -15,12 +15,12 @@ type Rendered = {
 };
 
 let stylesheet = "";
-let app = "";
+let playground = "";
 
 beforeAll(async () => {
   const decoder = new TextDecoder();
   stylesheet = decoder.decode(await readFile("src/styles.css"));
-  app = decoder.decode(await readFile("src/App.tsx"));
+  playground = decoder.decode(await readFile("src/Playground.tsx"));
 });
 
 describe("the swapping button label", () => {
@@ -48,7 +48,7 @@ describe("the swapping button label", () => {
   });
 
   it("gives every toolbar call site a widest word no shorter than its states", () => {
-    const callSites = [...app.matchAll(
+    const callSites = [...playground.matchAll(
       /<SwapLabel widest="(\w+)">\{\w+ \? "(\w+)" : "(\w+)"\}<\/SwapLabel>/g
     )];
 

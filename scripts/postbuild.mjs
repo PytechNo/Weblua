@@ -5,7 +5,10 @@
 //     route-specific <title>/description/canonical tags (nginx's
 //     `try_files $uri $uri/` picks them up), instead of every route claiming
 //     to be the homepage. The embed route is marked noindex.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+//  3. Adds a modulepreload for the lazily-imported playground chunk to the app
+//     routes, so splitting it out of the landing bundle doesn't cost
+//     /playground an extra round trip.
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
@@ -13,6 +16,19 @@ import { createServer } from "vite";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dist = path.join(repoRoot, "dist");
 const template = readFileSync(path.join(dist, "index.html"), "utf8");
+
+/** The dynamic chunk App.tsx lazy-imports; Vite names it after the module. */
+function playgroundChunk() {
+  const match = readdirSync(path.join(dist, "assets")).find(
+    (file) => /^Playground-.*\.js$/.test(file)
+  );
+  if (!match) {
+    throw new Error("postbuild: no dist/assets/Playground-*.js chunk to preload");
+  }
+  return `/assets/${match}`;
+}
+
+const playgroundHref = playgroundChunk();
 
 function replaceOnce(html, pattern, replacement, label) {
   let found = false;
@@ -25,7 +41,13 @@ function replaceOnce(html, pattern, replacement, label) {
 }
 
 function routeHtml({ title, description, canonical, noindex }) {
-  let html = template;
+  let html = replaceOnce(
+    template,
+    "</head>",
+    `  <link rel="modulepreload" crossorigin href="${playgroundHref}" />
+  </head>`,
+    "</head> (modulepreload insert)"
+  );
   html = replaceOnce(html, /<title>[\s\S]*?<\/title>/, `<title>${title}</title>`, "<title>");
   for (const [pattern, value, label] of [
     [/(<meta name="description" content=")[^"]*(" \/>)/, description, "description"],
