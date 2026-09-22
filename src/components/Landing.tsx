@@ -186,8 +186,8 @@ const FEATURES = [
   },
   {
     icon: Braces,
-    title: "Lua 5.1–5.4 and Luau",
-    body: "Choose Lua 5.1 through 5.4 or the Luau language. Luau syntax is supported, but Weblua is not Roblox Studio and does not provide Roblox APIs or static type analysis."
+    title: "Lua 5.1–5.5 and Luau",
+    body: "Choose Lua 5.1 through 5.5 or the Luau language. Luau syntax is supported, but Weblua is not Roblox Studio and does not provide Roblox APIs or static type analysis."
   },
   {
     icon: Link,
@@ -255,7 +255,7 @@ const FAQS = [
   },
   {
     q: "Which Lua versions does Weblua support?",
-    a: "Weblua runs Lua 5.1, 5.2, 5.3, and 5.4, plus the Luau language. Select one runtime per project. Luau support covers the language runtime, not Roblox APIs or the Roblox production environment."
+    a: "Weblua runs Lua 5.1, 5.2, 5.3, 5.4, and 5.5, plus the Luau language. Select one runtime per project. Luau support covers the language runtime, not Roblox APIs or the Roblox production environment."
   },
   {
     q: "Does Weblua type-check Luau?",
@@ -285,7 +285,7 @@ const ACCESS_OPTIONS = [
     href: "/playground",
     features: [
       "No server-side run quota",
-      "Lua 5.1–5.4 and Luau runtimes",
+      "Lua 5.1–5.5 and Luau runtimes",
       "Shareable multi-file projects",
       "Source-only links and iframe embeds"
     ]
@@ -433,7 +433,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <div className="hero-copy">
               <span className="badge reveal">
                 <Sparkles size={13} />
-                Now running Lua 5.1–5.4 <em>and</em> Luau
+                Now running Lua 5.1–5.5 <em>and</em> Luau
               </span>
               <h1 id="hero-title" className="reveal" style={{ transitionDelay: "60ms" }}>
                 The Lua playground that lives in <span className="grad-text">your browser</span>
@@ -480,7 +480,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         <section className="proof" aria-label="Built with trusted technology">
           <p className="proof-label reveal">Built on a stack Lua developers already trust</p>
           <ul className="proof-logos reveal" style={{ transitionDelay: "80ms" }}>
-            <li>Lua 5.1–5.4</li>
+            <li>Lua 5.1–5.5</li>
             <li>Luau</li>
             <li>WebAssembly</li>
             <li>CodeMirror</li>
@@ -590,7 +590,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 <div className="showcase-text">
                   <h3>Real runtimes, real output</h3>
                   <p>
-                    Weblua executes Lua 5.1 through 5.4 and Luau through WebAssembly rather than
+                    Weblua executes Lua 5.1 through 5.5 and Luau through WebAssembly rather than
                     simulating output. Language behavior comes from the selected runtime, while the
                     browser host supplies a virtual project filesystem and preset input.
                   </p>
@@ -867,6 +867,9 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
           </nav>
           <nav className="footer-col" aria-label="Resources">
             <h4>Resources</h4>
+            <a href="https://www.lua.org/manual/5.5/" target="_blank" rel="noreferrer">
+              Lua 5.5 manual
+            </a>
             <a href="https://www.lua.org/manual/5.4/" target="_blank" rel="noreferrer">
               Lua 5.4 manual
             </a>

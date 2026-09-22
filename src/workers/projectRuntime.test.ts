@@ -160,11 +160,11 @@ describe("worker-side project validation", () => {
     ).toThrow(/must contain text source/);
   });
 
-  it("recognizes exactly the five supported runtimes", () => {
-    for (const flavor of ["lua51", "lua52", "lua53", "lua54", "luau"]) {
+  it("recognizes exactly the six supported runtimes", () => {
+    for (const flavor of ["lua51", "lua52", "lua53", "lua54", "lua55", "luau"]) {
       expect(isRuntimeFlavor(flavor)).toBe(true);
     }
-    expect(isRuntimeFlavor("lua55")).toBe(false);
+    expect(isRuntimeFlavor("lua56")).toBe(false);
     expect(isRuntimeFlavor(undefined)).toBe(false);
   });
 

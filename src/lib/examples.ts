@@ -123,6 +123,43 @@ end
 print(divide(10, 0))`
   },
   {
+    id: "lua55-changes",
+    title: "New in Lua 5.5",
+    flavor: "lua55",
+    code: `-- New in Lua 5.5 -- see lua.org/manual/5.5/readme.html#changes
+global print, ipairs, table, utf8
+
+-- Once a chunk declares one global, every global it uses must be declared.
+global total
+total = 0
+
+-- A named vararg arrives as an ordinary table.
+local function sum(label, ...values)
+  for _, value in ipairs(values) do
+    total = total + value
+  end
+  return label, #values
+end
+
+print(sum("added", 3, 4, 5))
+print("total", total)
+
+-- table.create preallocates; utf8.offset now also returns the final position.
+local slots = table.create(4, 0)
+slots[1] = "first"
+print("slots", #slots, slots[1])
+print("utf8.offset", utf8.offset("héllo", 3))
+
+-- Floats print with enough digits to be read back exactly.
+print(1 / 3)
+
+-- Loop variables are read only, so this would not compile:
+--   for i = 1, 3 do i = i + 1 end
+for i = 1, 3 do
+  print("i", i)
+end`
+  },
+  {
     id: "luau-types",
     title: "Luau annotations",
     flavor: "luau",

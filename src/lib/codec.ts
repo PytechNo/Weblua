@@ -27,6 +27,7 @@ const V1_FLAVOR_CODE: Record<RuntimeFlavor, string> = {
   lua52: "2",
   lua53: "3",
   lua54: "L",
+  lua55: "5",
   luau: "U"
 };
 
@@ -35,6 +36,7 @@ const V1_CODE_FLAVOR: Record<string, RuntimeFlavor> = {
   2: "lua52",
   3: "lua53",
   L: "lua54",
+  5: "lua55",
   U: "luau"
 };
 

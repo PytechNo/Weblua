@@ -13,6 +13,7 @@ import {
   readShareHash,
   tryMakeProjectShareHash
 } from "./codec";
+import { runtimeFlavors } from "./types";
 
 function pseudoRandomText(length: number): string {
   let state = 0x6d2b79f5;
@@ -39,6 +40,26 @@ function toBase64Url(bytes: Uint8Array): string {
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
+
+/**
+ * The share format maps each flavor onto a single character, in two tables that
+ * have to agree. A flavor missing from either one silently decodes as something
+ * else, so every supported runtime is round-tripped here rather than spot-checked.
+ */
+describe.each(runtimeFlavors)("share links carry the %s runtime", (flavor) => {
+  it("survives a project round trip", async () => {
+    const entry = flavor === "luau" ? "main.luau" : "main.lua";
+    const project = { flavor, entry, files: { [entry]: 'print("hi")' } };
+
+    expect(await decodeProject(await encodeProject(project))).toEqual(project);
+  });
+
+  it("survives a snippet round trip", async () => {
+    const snippet = { flavor, code: 'print("hi")' };
+
+    expect(await decodeSnippet(await encodeSnippet(snippet))).toEqual(snippet);
+  });
+});
 
 describe("project share codec", () => {
   it("round trips all project files, entry path, and runtime through v2", async () => {

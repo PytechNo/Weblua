@@ -15,8 +15,8 @@ import {
   stdoutOf
 } from "./runtimeTestHost";
 
-/** The four Lua runtimes. Luau is covered separately; see the file comment. */
-const luaFlavors = ["lua51", "lua52", "lua53", "lua54"] as const;
+/** Every Lua runtime. Luau is covered separately; see the file comment. */
+const luaFlavors = ["lua51", "lua52", "lua53", "lua54", "lua55"] as const;
 
 /**
  * A project every Lua runtime can execute: a dotted require, a slashed require,
@@ -281,8 +281,115 @@ describe.each(luaFlavors)("%s end-to-end execution", (flavor) => {
   });
 });
 
+/**
+ * The language and library changes listed at lua.org/manual/5.5/readme.html.
+ * These are what distinguish the 5.5 runtime from 5.4 in user-visible ways, so
+ * they are asserted directly rather than trusted to the shared portable suite.
+ */
+describe("Lua 5.5 language and library changes", () => {
+  const evaluate = async (source: string) =>
+    stdoutOf(await run({ flavor: "lua55", entry: "main.lua", files: { "main.lua": source } }));
+
+  it("reports itself as Lua 5.5", async () => {
+    expect(await evaluate("print(_VERSION)")).toEqual(["Lua 5.5"]);
+  });
+
+  /**
+   * A `global` declaration puts the rest of the chunk in declared-globals-only
+   * mode, so `print` has to be declared too -- that strictness is the point of
+   * the feature, and `global *` is the documented way back out of it.
+   */
+  it("accepts global variable and global function declarations", async () => {
+    const out = await evaluate(`
+      global print
+      global answer
+      answer = 42
+      global function greet() return "hi" end
+      print(answer, greet())
+    `);
+
+    expect(out).toEqual(["42\thi"]);
+  });
+
+  it("reopens undeclared globals with global *", async () => {
+    const out = await evaluate(`
+      global *
+      global answer
+      answer = 42
+      print(answer)
+    `);
+
+    expect(out).toEqual(["42"]);
+  });
+
+  it("reports an undeclared global as a diagnostic once a chunk declares one", async () => {
+    const result = await check({
+      flavor: "lua55",
+      entry: "main.lua",
+      files: { "main.lua": "global answer\nanswer = 42\nundeclared = 1\n" }
+    });
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0].line).toBe(3);
+    expect(result.diagnostics[0].message).toMatch(/variable 'undeclared' not declared/);
+  });
+
+  it("binds a named vararg to a table", async () => {
+    const out = await evaluate(`
+      local function tail(first, ...rest) return first, #rest, rest[2] end
+      print(tail("a", "b", "c", "d"))
+    `);
+
+    expect(out).toEqual(["a\t3\tc"]);
+  });
+
+  it("creates a table with table.create", async () => {
+    const out = await evaluate(`
+      local t = table.create(8, 0)
+      t[1] = "x"
+      print(#t, t[1])
+    `);
+
+    expect(out).toEqual(["1\tx"]);
+  });
+
+  it("returns the final position of a character from utf8.offset", async () => {
+    expect(await evaluate('print(utf8.offset("héllo", 3))')).toEqual(["4\t4"]);
+  });
+
+  /** 5.4 printed floats as `%.14g`, which could not always be read back exactly. */
+  it("prints floats with enough digits to read them back", async () => {
+    const out = await evaluate(`
+      print(1 / 3)
+      print(2.0 ^ 53)
+    `);
+
+    expect(out).toEqual(["0.33333333333333331", "9007199254740992.0"]);
+  });
+
+  it("rejects assignment to a for-loop variable", async () => {
+    const result = await check({
+      flavor: "lua55",
+      entry: "main.lua",
+      files: { "main.lua": "for i = 1, 3 do\n  i = i + 1\nend\n" }
+    });
+
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0].line).toBe(2);
+    expect(result.diagnostics[0].message).toMatch(/const variable 'i'/);
+  });
+
+  /** 5.5-only syntax must still be an error on the runtime the user picked. */
+  it("is rejected by Lua 5.4, which has no global declarations", async () => {
+    const files = { "main.lua": "global answer\nanswer = 1\n" };
+
+    expect((await check({ flavor: "lua55", entry: "main.lua", files })).diagnostics).toEqual([]);
+    expect((await check({ flavor: "lua54", entry: "main.lua", files })).diagnostics).toHaveLength(1);
+  });
+});
+
 describe("stderr routing", () => {
-  it.each(["lua51", "lua52", "lua53"] as const)("streams io.stderr writes on %s", async (flavor) => {
+  it.each(["lua51", "lua52", "lua53", "lua55"] as const)("streams io.stderr writes on %s", async (flavor) => {
     const result = await run({
       flavor,
       entry: "main.lua",

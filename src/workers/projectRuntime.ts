@@ -15,7 +15,7 @@ const LUA_OK = 0;
 const LUA_MEMORY_LIMIT = 32 * 1024 * 1024;
 
 /** Runtimes served by the statically compiled `lua-wasm-bindings` glue. */
-export type StaticLuaFlavor = "lua51" | "lua52" | "lua53";
+export type StaticLuaFlavor = "lua51" | "lua52" | "lua53" | "lua55";
 
 export interface NormalizedRequest {
   id: string;
@@ -267,7 +267,18 @@ export function validateProject(project: ProjectPayload): ProjectPayload {
 }
 
 export function isRuntimeFlavor(flavor: unknown): flavor is RuntimeFlavor {
-  return flavor === "lua51" || flavor === "lua52" || flavor === "lua53" || flavor === "lua54" || flavor === "luau";
+  return (
+    flavor === "lua51" ||
+    flavor === "lua52" ||
+    flavor === "lua53" ||
+    flavor === "lua54" ||
+    flavor === "lua55" ||
+    flavor === "luau"
+  );
+}
+
+export function isStaticLuaFlavor(flavor: unknown): flavor is StaticLuaFlavor {
+  return flavor === "lua51" || flavor === "lua52" || flavor === "lua53" || flavor === "lua55";
 }
 
 export function isProjectPath(path: unknown): path is string {
@@ -290,6 +301,7 @@ export async function checkProject(
     case "lua51":
     case "lua52":
     case "lua53":
+    case "lua55":
       return checkStaticLua(project, deps);
   }
 }
@@ -308,6 +320,7 @@ export async function runProject(
     case "lua51":
     case "lua52":
     case "lua53":
+    case "lua55":
       return runStaticLua(request, push, deps, observer);
   }
 }
@@ -588,8 +601,8 @@ export async function createStaticLuaRuntime(
   deps: RuntimeDependencies,
   io: StaticLuaIo = {}
 ): Promise<StaticLuaRuntime> {
-  if (flavor !== "lua51" && flavor !== "lua52" && flavor !== "lua53") {
-    throw new Error(`${flavor} is not a static Lua 5.1–5.3 runtime.`);
+  if (!isStaticLuaFlavor(flavor)) {
+    throw new Error(`${flavor} is not a statically compiled Lua runtime.`);
   }
 
   const { factory, wasmBinary } = await deps.loadStaticLuaAssets(flavor);
@@ -613,9 +626,14 @@ export async function createStaticLuaRuntime(
     ? (wrap("lua_pcall", "number", ["number", "number", "number", "number"]) as StaticLuaRuntime["pcall"])
     : (wrap("lua_pcallk", "number", ["number", "number", "number", "number", "number", "number"]) as (...args: number[]) => number);
 
+  // Lua 5.5 replaced `luaL_openlibs` with `luaL_openselectedlibs(L, load, preload)`
+  // and no longer exports the old name. `~0` is the mask its headers use for
+  // "load every standard library", which is what the earlier call did.
+  const openLibs = openLibsFor(flavor, wrap);
+
   return {
     newState: wrap("luaL_newstate", "number", []) as StaticLuaRuntime["newState"],
-    openLibs: wrap("luaL_openlibs", null, ["number"]) as StaticLuaRuntime["openLibs"],
+    openLibs,
     loadString: wrap("luaL_loadstring", "number", ["number", "string"]) as StaticLuaRuntime["loadString"],
     pcall: isLua51
       ? call
@@ -623,6 +641,26 @@ export async function createStaticLuaRuntime(
           call(state, nargs, nresults, errfunc, 0, 0) as unknown as number,
     toString: wrap("lua_tolstring", "string", ["number", "number", "number"]) as StaticLuaRuntime["toString"],
     close: wrap("lua_close", null, ["number"]) as StaticLuaRuntime["close"]
+  };
+}
+
+/** Every standard library, as the mask `luaL_openlibs` used before 5.5 split it up. */
+const LUA55_ALL_LIBS = ~0;
+
+type CWrap = (
+  name: string,
+  returnType: "number" | "string" | null,
+  argTypes: Array<"number" | "string">
+) => (...args: Array<number | string>) => unknown;
+
+function openLibsFor(flavor: StaticLuaFlavor, wrap: CWrap): StaticLuaRuntime["openLibs"] {
+  if (flavor !== "lua55") {
+    return wrap("luaL_openlibs", null, ["number"]) as StaticLuaRuntime["openLibs"];
+  }
+
+  const openSelected = wrap("luaL_openselectedlibs", null, ["number", "number", "number"]);
+  return (state) => {
+    openSelected(state, LUA55_ALL_LIBS, 0);
   };
 }
 

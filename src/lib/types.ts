@@ -1,4 +1,4 @@
-export const runtimeFlavors = ["lua51", "lua52", "lua53", "lua54", "luau"] as const;
+export const runtimeFlavors = ["lua51", "lua52", "lua53", "lua54", "lua55", "luau"] as const;
 
 export type RuntimeFlavor = (typeof runtimeFlavors)[number];
 

@@ -77,6 +77,7 @@ const runtimeOptions: Array<{ value: RuntimeFlavor; label: string }> = [
   { value: "lua52", label: "Lua 5.2" },
   { value: "lua53", label: "Lua 5.3" },
   { value: "lua54", label: "Lua 5.4" },
+  { value: "lua55", label: "Lua 5.5" },
   { value: "luau", label: "Luau" }
 ];
 

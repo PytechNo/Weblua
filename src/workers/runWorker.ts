@@ -70,6 +70,8 @@ async function loadStaticLuaGlueFactory(flavor: StaticLuaFlavor): Promise<unknow
       return import("lua-wasm-bindings/dist/glue/glue-lua-5.2.4.js");
     case "lua53":
       return import("lua-wasm-bindings/dist/glue/glue-lua-5.3.6.js");
+    case "lua55":
+      return import("lua-wasm-bindings/dist/glue/glue-lua-5.5.0.js");
   }
 }
 
@@ -81,5 +83,7 @@ async function loadStaticLuaWasmUrl(flavor: StaticLuaFlavor): Promise<string> {
       return (await import("lua-wasm-bindings/dist/glue/glue-lua-5.2.4.wasm?url")).default;
     case "lua53":
       return (await import("lua-wasm-bindings/dist/glue/glue-lua-5.3.6.wasm?url")).default;
+    case "lua55":
+      return (await import("lua-wasm-bindings/dist/glue/glue-lua-5.5.0.wasm?url")).default;
   }
 }

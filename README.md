@@ -1,7 +1,7 @@
 # Weblua
 
 [Weblua](https://weblua.com/) is a free, client-side playground for multi-file
-Lua 5.1, 5.2, 5.3, 5.4, and Luau projects. Each run happens in a dedicated Web
+Lua 5.1, 5.2, 5.3, 5.4, 5.5, and Luau projects. Each run happens in a dedicated Web
 Worker through WebAssembly; there is no account system, code-execution backend,
 or project database.
 
@@ -11,7 +11,7 @@ Roblox services, instances, globals, Studio tooling, or static type analysis.
 
 ## What the playground includes
 
-- Lua 5.1, 5.2, 5.3, 5.4, and Luau runtime selection per project.
+- Lua 5.1, 5.2, 5.3, 5.4, 5.5, and Luau runtime selection per project.
 - Multi-file projects with a selectable entry file.
 - `require("lib.module")`, `require("lib/module")`, and `init.lua` module aliases.
 - A compile-only **Check** action with per-file syntax diagnostics.
@@ -40,7 +40,7 @@ and can be loaded with the playground's Import project button.
 
 Projects contain a runtime flavor, an entry path, and a map of normalized relative
 source paths. Lua 5.4 mounts those files into Wasmoon's virtual filesystem. Lua
-5.1–5.3 register the same paths through `package.preload`. Luau compiles every file
+5.1–5.3 and 5.5 register the same paths through `package.preload`. Luau compiles every file
 and resolves modules through an in-VM browser-safe loader.
 
 The **Check** action only compiles every source file. For Luau, this verifies syntax;
@@ -85,7 +85,7 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
 - The Luau runtime does not include Roblox APIs or a static type checker.
 - The virtual project filesystem only contains the source files supplied to the run.
 - Lua 5.4's `io.read` override and Luau's `read` helper support `*l`, `*L`, and
-  `*a`. Lua 5.1–5.3 receive the preset input through their standard byte-stream stdin.
+  `*a`. Lua 5.1–5.3 and 5.5 receive the preset input through their standard byte-stream stdin.
 
 - Lua 5.4 routes `print`, `io.write`, `io.stdout:write`, and stderr writes through
   the captured result stream while retaining the native file handles.

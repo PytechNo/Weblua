@@ -16,7 +16,8 @@ import {
 const STATIC_WASM: Record<StaticLuaFlavor, string> = {
   lua51: "node_modules/lua-wasm-bindings/dist/glue/glue-lua-5.1.5.wasm",
   lua52: "node_modules/lua-wasm-bindings/dist/glue/glue-lua-5.2.4.wasm",
-  lua53: "node_modules/lua-wasm-bindings/dist/glue/glue-lua-5.3.6.wasm"
+  lua53: "node_modules/lua-wasm-bindings/dist/glue/glue-lua-5.3.6.wasm",
+  lua55: "node_modules/lua-wasm-bindings/dist/glue/glue-lua-5.5.0.wasm"
 };
 
 // Literal specifiers, exactly as the worker uses: a computed one is unresolvable.
@@ -28,6 +29,8 @@ function importStaticLuaGlue(flavor: StaticLuaFlavor): Promise<unknown> {
       return import("lua-wasm-bindings/dist/glue/glue-lua-5.2.4.js");
     case "lua53":
       return import("lua-wasm-bindings/dist/glue/glue-lua-5.3.6.js");
+    case "lua55":
+      return import("lua-wasm-bindings/dist/glue/glue-lua-5.5.0.js");
   }
 }
 
