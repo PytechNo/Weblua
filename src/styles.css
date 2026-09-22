@@ -50,7 +50,6 @@
 
   --shadow-card: 0 1px 2px rgba(2, 4, 12, 0.5), 0 12px 32px -16px rgba(2, 4, 12, 0.7);
   --shadow-pop: 0 24px 64px -24px rgba(72, 100, 255, 0.35);
-  --sale-banner-height: 40px;
   --nav-height: 68px;
 }
 
@@ -155,31 +154,7 @@ svg {
 }
 
 .skip-link:focus-visible {
-  top: calc(var(--sale-banner-height) + 12px);
-}
-
-.sale-banner {
-  position: sticky;
-  inset: 0 0 auto;
-  z-index: 70;
-  min-height: var(--sale-banner-height);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 7px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--warning) 34%, var(--border));
-  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.sale-banner a {
-  color: inherit;
-  font-weight: 650;
-  text-underline-offset: 3px;
+  top: 12px;
 }
 
 /* ==========================================================================
@@ -343,7 +318,7 @@ body[data-theme="light"] .tok-keyword {
 
 .nav {
   position: fixed;
-  inset: var(--sale-banner-height) 0 auto 0;
+  inset: 0 0 auto 0;
   z-index: 50;
   transition: background-color 240ms ease, border-color 240ms ease, backdrop-filter 240ms ease;
   border-bottom: 1px solid transparent;
@@ -816,7 +791,7 @@ body[data-theme="light"] .orb {
   max-width: 1180px;
   margin: 0 auto;
   padding: 88px 22px;
-  scroll-margin-top: calc(var(--sale-banner-height) + var(--nav-height));
+  scroll-margin-top: var(--nav-height);
 }
 
 .section-narrow {
@@ -1458,6 +1433,12 @@ body[data-theme="light"] .orb {
   position: relative;
   min-height: 56px;
   display: flex;
+  /* Wraps at every width. Held on one line, the row crushed its own contents
+     between ~880px and ~1100px: the selects shrank past their labels until
+     RUNTIME sat on top of the Example value, and "Copy link" broke across two
+     lines. Nothing in here changes width at runtime, so an extra row costs no
+     layout shift. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 14px;
   padding: 10px 12px;
@@ -1468,6 +1449,9 @@ body[data-theme="light"] .orb {
 }
 
 .control {
+  /* Never shrink past the select's own min-width, or the next control's label
+     rides up over this one's value. */
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1673,6 +1657,8 @@ body[data-theme="light"] .orb {
 .button,
 .icon-button {
   height: 36px;
+  flex: 0 0 auto;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1737,6 +1723,23 @@ body[data-theme="light"] .orb {
   background: linear-gradient(120deg, var(--primary-soft), var(--violet));
   border-color: transparent;
   box-shadow: 0 10px 24px -8px rgba(91, 124, 255, 0.8);
+}
+
+/* Both states stack in the one grid cell, so the slot is always as wide as
+   the longer word and a swap costs no layout. See SwapLabel in App.tsx. */
+.swap-label {
+  display: grid;
+}
+
+/* Stretched, not centred: a centred short word would still re-centre itself
+   inside the wider slot when it swapped. */
+.swap-label > span {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
+.swap-label > span + span {
+  visibility: hidden;
 }
 
 .run-kbd {
@@ -2188,6 +2191,18 @@ body[data-theme="light"] .orb {
    Responsive
    ========================================================================== */
 
+@media (max-width: 1400px) {
+  /* Below ~1400px the run controls cannot share a line with the two selects
+     without being crushed, so they take a line of their own. Left-aligned like
+     the mobile layout: margin-left: auto would strand them beside a hole as
+     wide as the selects. */
+  .toolbar-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 1020px) {
   .hero-inner {
     grid-template-columns: 1fr;
@@ -2218,16 +2233,6 @@ body[data-theme="light"] .orb {
 }
 
 @media (max-width: 880px) {
-  /* The domain notice is desktop-only. Zeroing the height keeps the nav, the
-     skip link, and every section scroll offset flush with the viewport top. */
-  :root {
-    --sale-banner-height: 0px;
-  }
-
-  .sale-banner {
-    display: none;
-  }
-
   .nav-links,
   .nav-cta {
     display: none;
@@ -2288,7 +2293,6 @@ body[data-theme="light"] .orb {
 
   .toolbar {
     align-items: stretch;
-    flex-wrap: wrap;
     gap: 10px;
   }
 
@@ -2303,9 +2307,6 @@ body[data-theme="light"] .orb {
   }
 
   .toolbar-actions {
-    width: 100%;
-    margin-left: 0;
-    justify-content: flex-start;
     flex-wrap: wrap;
   }
 
@@ -2343,6 +2344,9 @@ body[data-theme="light"] .orb {
   }
 
   .file-list {
+    /* Horizontal here, and empty until restore() resolves. Without a reserved
+       row the first file pushed .file-actions and the editor down 32px. */
+    min-height: 42px;
     display: flex;
     gap: 4px;
     padding: 5px 7px;

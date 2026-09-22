@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GitHubMark, MoonMark } from "./Brand";
-import { SaleBanner } from "./SaleBanner";
 
 type Theme = "dark" | "light";
 
@@ -346,8 +345,6 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
 
   return (
     <div className="landing">
-      <SaleBanner />
-
       <a className="skip-link" href="#main">
         Skip to content
       </a>

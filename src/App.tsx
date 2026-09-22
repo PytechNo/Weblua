@@ -28,6 +28,7 @@ import {
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitHubMark, MoonMark } from "./components/Brand";
 import { Landing } from "./components/Landing";
+import { SwapLabel } from "./components/SwapLabel";
 import { checkProject } from "./lib/checker";
 import {
   deserializeProject,
@@ -763,12 +764,12 @@ function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
           <div className="toolbar-actions">
             <button className="button button-primary" type="button" onClick={execute} disabled={isRunning}>
               <Play size={16} />
-              {isRunning ? "Running" : "Run"}
+              <SwapLabel widest="Running">{isRunning ? "Running" : "Run"}</SwapLabel>
               <kbd className="run-kbd" aria-hidden="true">Ctrl ↵</kbd>
             </button>
             <button className="button" type="button" onClick={runCheck} disabled={isChecking} title="Compile all files without running (Ctrl+Shift+Enter)">
               <ShieldCheck size={16} />
-              {isChecking ? "Checking" : "Check"}
+              <SwapLabel widest="Checking">{isChecking ? "Checking" : "Check"}</SwapLabel>
             </button>
             <button className="button" type="button" onClick={copyShareLink}>
               <Link size={16} />
