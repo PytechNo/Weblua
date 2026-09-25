@@ -8,7 +8,7 @@ Date: 2026-07-09
 >    [src/entry-prerender.tsx](../src/entry-prerender.tsx) and bakes the full landing markup into
 >    `dist/index.html` (crawlers get real HTML; the client re-renders over it with `createRoot`).
 > 2. `dist/playground/index.html` and `dist/embed/index.html` are generated with route-specific
->    title/description/canonical; the embed route is `noindex`. Nginx's `try_files $uri $uri/`
+>    title/description/canonical; the embed route is `noindex`. Nginx's `try_files $uri $uri/index.html`
 >    serves them. (Per-snippet previews remain impossible without a backend — snippets live in the
 >    URL fragment.)
 > 3. `public/robots.txt` and `public/sitemap.xml` added.

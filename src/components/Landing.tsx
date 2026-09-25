@@ -436,7 +436,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 Now running Lua 5.1–5.5 <em>and</em> Luau
               </span>
               <h1 id="hero-title" className="reveal" style={{ transitionDelay: "60ms" }}>
-                The Lua playground that lives in <span className="grad-text">your browser</span>
+                The Lua &amp; Luau playground that lives in <span className="grad-text">your browser</span>
               </h1>
               <p className="hero-sub reveal" style={{ transitionDelay: "120ms" }}>
                 Write, run, and share multi-file Lua and Luau projects directly in your browser.

@@ -3,7 +3,7 @@
 //     execute JS still see the full marketing content.
 //  2. Emits dist/playground/index.html and dist/embed/index.html with
 //     route-specific <title>/description/canonical tags (nginx's
-//     `try_files $uri $uri/` picks them up), instead of every route claiming
+//     `try_files $uri $uri/index.html` picks them up), instead of every route claiming
 //     to be the homepage. The embed route is marked noindex.
 //  3. Adds a modulepreload for the lazily-imported playground chunk to the app
 //     routes, so splitting it out of the landing bundle doesn't cost
@@ -83,9 +83,9 @@ function routeHtml({ title, description, canonical, noindex }) {
 const routes = [
   {
     dir: "playground",
-    title: "Lua 5.1–5.5 &amp; Luau Online Playground — Weblua",
+    title: "Online Luau &amp; Lua Editor — Weblua Playground",
     description:
-      "Write, run, and share multi-file Lua 5.1–5.5 and Luau projects directly in your browser without an account or execution backend.",
+      "Write, run, and share multi-file Luau and Lua 5.1–5.5 projects in your browser. Switch runtimes instantly; no account or install needed.",
     canonical: "https://weblua.com/playground",
     noindex: false
   },
