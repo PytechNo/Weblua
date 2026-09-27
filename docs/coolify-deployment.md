@@ -88,7 +88,8 @@ baked into the built JS.
 
 ## 4. Pin the Node version
 
-The Dockerfile path is already pinned to the official Node 22 image.
+The Dockerfile path is already pinned to the official Node 22 image, and it upgrades
+npm to 11 before `npm ci` because `package-lock.json` is written by npm 11.
 
 If you use Nixpacks instead, do not use Node 20 unless Coolify resolves it to 20.19 or
 newer, and do not use Node 22 unless it resolves to 22.12 or newer. If Coolify logs show
@@ -137,6 +138,7 @@ fallback, without a project backend or database.
 | Symptom | Likely cause |
 |---|---|
 | Build fails with `Cannot find native binding` / `@rolldown/binding-linux-x64-gnu` | Node patch version too old under Nixpacks — use Dockerfile build pack or Node 22.12+ |
+| `npm ci` fails with `Missing: @emnapi/core@… from lock file` | The lockfile was written by npm 11 and checked by npm 10 (bundled with Node 22). The Dockerfile installs npm 11 first; under Nixpacks, use the Dockerfile build pack |
 | Build succeeds, blank page | Check browser console for a wasm MIME-type/CORS error; ensure the static server (nginx) serves `.wasm` with `application/wasm` (default nginx does) |
 | Analytics/Sentry not showing up | `VITE_*` vars must be set **before** the build that's currently deployed — redeploy after adding them |
 | Shared `/playground#c=2...` or `/embed#c=2...` link 404s on direct visit | Static server isn't falling back to `index.html` — see the route-fallback note under [Option A](#option-a--dockerfile-build-pack-recommended) |

@@ -166,7 +166,8 @@ until the catalog is updated.
 
 ## Docker and self-hosting
 
-The included multi-stage Dockerfile builds the Vite app with Node 22 and serves the
+The included multi-stage Dockerfile builds the Vite app with Node 22 and npm 11 (the
+npm that writes `package-lock.json`) and serves the
 static output with nginx:
 
 ```sh
