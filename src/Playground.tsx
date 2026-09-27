@@ -1,5 +1,4 @@
-import { StreamLanguage, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { lua } from "@codemirror/legacy-modes/mode/lua";
+import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { type Diagnostic as CmDiagnostic, forceLinting, lintGutter, linter } from "@codemirror/lint";
 import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
@@ -25,12 +24,15 @@ import {
   Timer,
   Trash2,
   Upload,
+  WandSparkles,
   X
 } from "lucide-react";
 import { type ChangeEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitHubMark, MoonMark } from "./components/Brand";
 import { SwapLabel } from "./components/SwapLabel";
+import { luaSupport, refreshLuaContext } from "./lang/lua";
 import { checkProject } from "./lib/checker";
+import { formatLua, minimalChange } from "./lib/formatter";
 import {
   deserializeProject,
   PROJECT_EXPORT_EXTENSION,
@@ -69,8 +71,6 @@ import {
 } from "./lib/workspaceStore";
 
 type Theme = "dark" | "light";
-
-const languageExtension = StreamLanguage.define(lua);
 
 const runtimeOptions: Array<{ value: RuntimeFlavor; label: string }> = [
   { value: "lua51", label: "Lua 5.1" },
@@ -206,6 +206,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   /** Off: five seconds per run. On: thirty, for benchmarks and heavy loops. */
   const [longRuns, setLongRuns] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [isFormatting, setIsFormatting] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   // Constant for the life of the mount: the answer cannot change once the
   // hash is read and restore() is in flight.
@@ -385,8 +386,45 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     }
   }, [workspace]);
 
+  /**
+   * Formats the open file with StyLua, loaded on first use. The result is
+   * applied as the smallest edit that covers the changes, so undo, the
+   * cursor, and scroll position all survive; it is dropped if the file was
+   * edited or switched while the formatter loaded.
+   */
+  const formatActiveFile = useCallback(async () => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+    const { project, activeFile } = workspaceRef.current;
+    const source = view.state.doc.toString();
+
+    setIsFormatting(true);
+    try {
+      const formatted = await formatLua(source, project.flavor);
+      trackEvent("format", { flavor: project.flavor, status: formatted.ok ? "ok" : "error" });
+      if (!formatted.ok) {
+        setNotice(formatted.message);
+        return;
+      }
+      if (workspaceRef.current.activeFile !== activeFile || view.state.doc.toString() !== source) return;
+
+      const change = minimalChange(source, formatted.code);
+      if (change) view.dispatch({ changes: change, userEvent: "input.format" });
+      setNotice(null);
+    } finally {
+      setIsFormatting(false);
+    }
+  }, []);
+
   useEffect(() => {
     const handleKeydown = (event: KeyboardEvent) => {
+      // event.code, because Alt changes event.key on macOS.
+      if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.code === "KeyF") {
+        event.preventDefault();
+        void formatActiveFile();
+        return;
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
         if (event.shiftKey) {
@@ -407,7 +445,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
 
     window.addEventListener("keydown", handleKeydown);
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [execute, runCheck, stopRun]);
+  }, [execute, formatActiveFile, runCheck, stopRun]);
 
   /**
    * The lint source reads the workspace through a ref rather than closing over
@@ -446,14 +484,24 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
       { delay: 650 }
     );
 
-    return [languageExtension, liveLinter, lintGutter()];
+    // Completion, hover, and builtin highlighting read the project through the
+    // same ref, for the same reason.
+    const language = luaSupport({
+      flavor: () => workspaceRef.current.project.flavor,
+      activeFile: () => workspaceRef.current.activeFile,
+      files: () => Object.keys(workspaceRef.current.project.files)
+    });
+
+    return [language, liveLinter, lintGutter()];
   }, []);
 
   // A stable lint source no longer re-runs just because the extension array
   // was rebuilt, so ask for a pass when the runtime or the open file changes.
   useEffect(() => {
     const view = editorRef.current?.view;
-    if (view) forceLinting(view);
+    if (!view) return;
+    forceLinting(view);
+    view.dispatch({ effects: refreshLuaContext.of(null) });
   }, [workspace.activeFile, workspace.project.flavor]);
 
   const loadExample = (id: string) => {
@@ -879,6 +927,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
               <span className="window-dots" aria-hidden="true"><i /><i /><i /></span>
               <span className="pane-title">{workspace.activeFile}</span>
               <span className="pane-badge">{runtimeLabel(workspace.project.flavor)}</span>
+              <button className="icon-button text-icon" type="button" onClick={() => void formatActiveFile()} disabled={isFormatting || !editorReady} title="Format file (Shift+Alt+F)" aria-label="Format file">
+                <WandSparkles size={16} />
+              </button>
               <button className="icon-button text-icon" type="button" onClick={copyInput} title="Copy active file" aria-label="Copy active file">
                 {copiedInput ? <Check size={16} /> : <Copy size={16} />}
               </button>

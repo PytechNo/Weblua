@@ -777,15 +777,24 @@ async function runLuau(
 
     state.env.set("__weblua_modules", modules, true);
     state.env.set("__weblua_module_aliases", buildModuleAliases(request.project.files), true);
+    // The task scheduler's only links to the host: a clock, and a sleep that
+    // luau-web's Asyncify bridge awaits, so output keeps streaming while a
+    // task waits.
+    state.env.set("__weblua_clock", () => performance.now() / 1000, true);
+    state.env.set("__weblua_sleep", (seconds: unknown) => sleepSeconds(seconds), true);
 
     const bootstrap = state.loadstring(LUAU_REQUIRE_BOOTSTRAP, "__weblua_require", true);
     await bootstrap();
+    const scheduler = state.loadstring(LUAU_TASK_BOOTSTRAP, "__weblua_task", true);
+    await scheduler();
 
     // Executing the entry through require gives it the same cache and cycle
     // semantics as all other modules. The only JS-to-Luau call is this single
-    // project start; nested module resolution remains inside the VM.
+    // project start; nested module resolution remains inside the VM. The
+    // scheduler runs the entry as its main thread, so top-level code can
+    // task.wait, and returns once no task is left waiting.
     const entry = state.loadstring(
-      `return require(${luaLongString(request.project.entry)})`,
+      `return __weblua_run(function() return require(${luaLongString(request.project.entry)}) end)`,
       request.project.entry,
       true
     );
@@ -795,17 +804,266 @@ async function runLuau(
   }
 }
 
+function sleepSeconds(seconds: unknown): Promise<void> {
+  const milliseconds = Math.max(0, Number(seconds) || 0) * 1000;
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/**
+ * Luau's task library: spawn, defer, delay, wait, and cancel over coroutines.
+ * Asyncify only lets Luau block on a promise, so the scheduling itself lives
+ * here, in the VM. Waits are real time and last at least one 60 Hz frame, as
+ * on Roblox, so `while true do task.wait() ... end` streams instead of flooding.
+ * An error in the main thread fails the run; one in any other task is printed
+ * and the rest keep running.
+ */
+export const LUAU_TASK_BOOTSTRAP = `
+  local clock = __weblua_clock
+  local sleep = __weblua_sleep
+  local reportError = warn
+  local coCreate = coroutine.create
+  local coResume = coroutine.resume
+  local coStatus = coroutine.status
+  local coRunning = coroutine.running
+  local coYield = coroutine.yield
+  local coClose = coroutine.close
+  local coIsYieldable = coroutine.isyieldable
+  local typeOf = type
+  local toNumber = tonumber
+  local toString = tostring
+  local raise = error
+  local pack = table.pack
+  local unpack = table.unpack
+  local mathMax = math.max
+
+  local FRAME = 1 / 60
+
+  local deferred = {}
+  local deferredHead = 1
+  local deferredTail = 0
+  local timers = {}
+  local order = 0
+  local mainThread = nil
+
+  local function before(a, b)
+    if a.wake ~= b.wake then return a.wake < b.wake end
+    return a.order < b.order
+  end
+
+  local function pushTimer(item)
+    local index = #timers + 1
+    timers[index] = item
+    while index > 1 do
+      local parent = index // 2
+      if not before(timers[index], timers[parent]) then break end
+      timers[index], timers[parent] = timers[parent], timers[index]
+      index = parent
+    end
+  end
+
+  local function popTimer()
+    local top = timers[1]
+    local count = #timers
+    timers[1] = timers[count]
+    timers[count] = nil
+    count -= 1
+    local index = 1
+    while true do
+      local smallest = index
+      local left = index * 2
+      local right = left + 1
+      if left <= count and before(timers[left], timers[smallest]) then smallest = left end
+      if right <= count and before(timers[right], timers[smallest]) then smallest = right end
+      if smallest == index then break end
+      timers[index], timers[smallest] = timers[smallest], timers[index]
+      index = smallest
+    end
+    return top
+  end
+
+  local function schedule(thread, seconds, args)
+    order += 1
+    pushTimer({ wake = clock() + mathMax(toNumber(seconds) or 0, FRAME), order = order, thread = thread, args = args })
+  end
+
+  -- A thread that finished or was cancelled since it was queued is skipped.
+  local function resume(thread, args)
+    if coStatus(thread) ~= "suspended" then return end
+    local ok, err
+    if args then
+      ok, err = coResume(thread, unpack(args, 1, args.n))
+    else
+      ok, err = coResume(thread)
+    end
+    if not ok then
+      if thread == mainThread then raise(err, 0) end
+      reportError(toString(err))
+    end
+  end
+
+  local function toThread(f, name)
+    local kind = typeOf(f)
+    if kind == "function" then return coCreate(f) end
+    if kind == "thread" then return f end
+    raise("task." .. name .. " expects a function or thread, got " .. kind, 3)
+  end
+
+  task = {}
+
+  function task.spawn(f, ...)
+    local thread = toThread(f, "spawn")
+    resume(thread, pack(...))
+    return thread
+  end
+
+  function task.defer(f, ...)
+    local thread = toThread(f, "defer")
+    deferredTail += 1
+    deferred[deferredTail] = { thread = thread, args = pack(...) }
+    return thread
+  end
+
+  function task.delay(seconds, f, ...)
+    local thread = toThread(f, "delay")
+    schedule(thread, seconds, pack(...))
+    return thread
+  end
+
+  function task.wait(seconds)
+    if not coIsYieldable() then
+      raise("task.wait cannot yield here (inside a metamethod or C call)", 2)
+    end
+    local started = clock()
+    schedule(coRunning(), seconds, nil)
+    coYield()
+    return clock() - started
+  end
+
+  function task.cancel(thread)
+    if typeOf(thread) ~= "thread" then
+      raise("task.cancel expects a thread, got " .. typeOf(thread), 2)
+    end
+    if thread == coRunning() then
+      raise("task.cancel cannot cancel the running thread", 2)
+    end
+    if coStatus(thread) == "suspended" then coClose(thread) end
+  end
+
+  function __weblua_run(main)
+    mainThread = coCreate(main)
+    resume(mainThread, nil)
+    while true do
+      while deferredHead <= deferredTail do
+        local item = deferred[deferredHead]
+        deferred[deferredHead] = nil
+        deferredHead += 1
+        resume(item.thread, item.args)
+      end
+      if #timers == 0 then return end
+
+      local remaining = timers[1].wake - clock()
+      if remaining > 0 then sleep(remaining) end
+      local due = popTimer()
+      resume(due.thread, due.args)
+    end
+  end
+`;
+
 export const LUAU_REQUIRE_BOOTSTRAP = `
   local moduleFunctions = __weblua_modules
   local moduleAliases = __weblua_module_aliases
   local moduleCache = {}
   local moduleLoading = {}
+  local debugInfo = debug.info
+  local typeOf = type
+  local stringMatch = string.match
+  local stringSub = string.sub
+  local stringGsub = string.gsub
+  local stringGmatch = string.gmatch
+  local tableConcat = table.concat
+
+  -- Every project file is compiled with its path as the chunk name, which
+  -- Luau reports as [string "path"]. The nearest project frame on the stack
+  -- is the module that called require, even through pcall or a local helper.
+  local function requiringModule()
+    for level = 3, 200 do
+      local source = debugInfo(level, "s")
+      if source == nil then return nil end
+      local path = stringMatch(source, '^%[string "(.*)"%]$') or source
+      if typeOf(moduleFunctions[path]) == "function" then return path end
+    end
+    return nil
+  end
+
+  -- Where a module sits in the require-by-string tree: its path without the
+  -- extension, and for an init file, the folder it stands for.
+  local function moduleLocation(path)
+    local location = stringGsub(path, "%.luau?$", "")
+    return (stringGsub(location, "/?init$", ""))
+  end
+
+  local function splitPath(path)
+    local parts = {}
+    for part in stringGmatch(path, "[^/]+") do parts[#parts + 1] = part end
+    return parts
+  end
+
+  -- Resolves ./, ../, and @self requires against the calling module, per
+  -- Luau's require-by-string rules: ./ is the caller's own folder (for an
+  -- init file, the folder that contains its folder) and @self is the caller.
+  local function resolveRelative(name, from)
+    if from == nil then
+      error("relative require of '" .. name .. "' must be called from a project module", 4)
+    end
+
+    local base = splitPath(moduleLocation(from))
+    local rest
+    if stringSub(name, 1, 6) == "@self/" then
+      rest = stringSub(name, 7)
+    else
+      base[#base] = nil
+      rest = name
+    end
+
+    for part in stringGmatch(rest, "[^/]+") do
+      if part == ".." then
+        if #base == 0 then
+          error("module '" .. name .. "' reaches above the project root", 4)
+        end
+        base[#base] = nil
+      elseif part ~= "." then
+        base[#base + 1] = part
+      end
+    end
+    return tableConcat(base, "/")
+  end
+
+  -- Relative paths name files, not dotted modules, so only real paths match.
+  local moduleSuffixes = { "", ".luau", ".lua", "/init.luau", "/init.lua" }
+  local function findModuleFile(target)
+    for index = 1, #moduleSuffixes do
+      local candidate = target .. moduleSuffixes[index]
+      if typeOf(moduleFunctions[candidate]) == "function" then return candidate end
+    end
+    return nil
+  end
 
   local function resolveModule(name)
+    if stringSub(name, 1, 2) == "./" or stringSub(name, 1, 3) == "../" or stringSub(name, 1, 6) == "@self/" then
+      local target = resolveRelative(name, requiringModule())
+      return findModuleFile(target), target
+    end
+
+    -- Other @aliases (builtin modules, .luaurc) are not provided yet.
+    if stringSub(name, 1, 1) == "@" then
+      local alias = stringMatch(name, "^@([^/]*)")
+      error("unknown require alias '@" .. alias .. "'; Weblua supports ./, ../, and @self paths", 3)
+    end
+
     local direct = moduleAliases[name]
     if direct then return direct end
 
-    local dotted = string.gsub(name, "%.", "/")
+    local dotted = stringGsub(name, "%.", "/")
     return moduleAliases[dotted]
   end
 
@@ -836,8 +1094,11 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
       error("require expects a module path string", 2)
     end
 
-    local path = resolveModule(name)
+    local path, target = resolveModule(name)
     if not path then
+      if target then
+        error("module '" .. name .. "' not found (looked for '" .. target .. "')", 2)
+      end
       error("module '" .. name .. "' not found", 2)
     end
     return loadModule(path)

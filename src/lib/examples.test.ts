@@ -19,4 +19,14 @@ describe("playground examples", () => {
     ]);
     expect(exampleMatchesProject(example, project)).toBe(true);
   });
+
+  it("includes a Luau project that uses task and relative requires", () => {
+    const example = examples.find((candidate) => candidate.id === "luau-tasks");
+    expect(example).toBeDefined();
+    if (!example) return;
+
+    const project = projectForExample(example);
+    expect(project.flavor).toBe("luau");
+    expect(Object.keys(project.files)).toEqual(["lib/countdown.luau", "lib/log.luau", "main.luau"]);
+  });
 });

@@ -187,7 +187,7 @@ const FEATURES = [
   {
     icon: Braces,
     title: "Lua 5.1–5.5 and Luau",
-    body: "Choose Lua 5.1 through 5.5 or the Luau language. Luau syntax is supported, but Weblua is not Roblox Studio and does not provide Roblox APIs or static type analysis."
+    body: "Choose Lua 5.1 through 5.5 or the Luau language, with Luau's task library and require-by-string paths. Weblua is not Roblox Studio and does not provide Roblox APIs or static type analysis."
   },
   {
     icon: Link,
@@ -207,14 +207,14 @@ const FEATURES = [
   {
     icon: Keyboard,
     title: "Keyboard-first",
-    body: "Ctrl+Enter to run, Esc to stop a run in progress, full CodeMirror editing with folding, bracket matching, and syntax highlighting tuned for Lua."
+    body: "Ctrl+Enter to run, Esc to stop, Shift+Alt+F to format with StyLua. Completion and hover docs follow the selected runtime's standard library, with folding and Lua and Luau syntax highlighting."
   }
 ] as const;
 
 const STEPS = [
   {
     title: "Write",
-    body: "Open the playground and start typing, or load one of thirteen examples—including a multi-file capability tour with modules and preset input."
+    body: "Open the playground and start typing, or load one of fourteen examples—including a multi-file capability tour with modules and preset input."
   },
   {
     title: "Run",
@@ -230,7 +230,7 @@ const BOUNDARIES = [
   {
     title: "Language runtime, not Roblox",
     body:
-      "Luau code can use language features such as annotations and generics, but Weblua does not emulate Roblox services, instances, globals, or Studio tooling."
+      "Luau code can use language features such as annotations and generics, plus the task library, but Weblua does not emulate Roblox services, instances, globals, or Studio tooling."
   },
   {
     title: "Compile check, not type checking",

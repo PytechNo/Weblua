@@ -1,0 +1,392 @@
+// One grammar for every Weblua flavor: Lua 5.1-5.5 and Luau. It is a
+// superset, not a validator -- the runtimes' own compilers report syntax
+// errors through Check and the lint gutter. The tree only has to be good
+// enough for highlighting, folding, indentation, and completion context, so
+// where the dialects disagree the grammar accepts both.
+
+@precedence {
+  typeArgs,
+  call,
+  member,
+  typeOptional,
+  typeIntersection @left,
+  typeUnion @left,
+  typeArrow @right,
+  cast,
+  power @right,
+  prefix,
+  times @left,
+  plus @left,
+  concat @right,
+  shift @left,
+  bitand @left,
+  bitxor @left,
+  bitor @left,
+  compare @left,
+  and @left,
+  or @left,
+  ifElse @right,
+  statement
+}
+
+@top Chunk { blockBody }
+
+Block { blockBody }
+
+blockBody { statement* ReturnStatement? }
+
+statement {
+  ";" |
+  Label |
+  ExpressionStatement |
+  Assignment |
+  CompoundAssignment |
+  LocalDeclaration |
+  LocalFunctionDeclaration |
+  FunctionDeclaration |
+  GlobalDeclaration |
+  IfStatement |
+  WhileStatement |
+  RepeatStatement |
+  DoStatement |
+  ForNumericStatement |
+  ForGenericStatement |
+  BreakStatement { kw<"break"> } |
+  ContinueStatement |
+  GotoStatement |
+  TypeAlias |
+  TypeFunction
+}
+
+// Any prefix expression is accepted as a statement. Lua only allows calls,
+// but rejecting the rest here would only add error nodes while typing.
+ExpressionStatement { primary !statement }
+
+Assignment { assignTarget ("," assignTarget)* "=" expressionList }
+
+CompoundAssignment { assignTarget CompoundOp expression }
+
+assignTarget { VariableName | MemberExpression }
+
+ContinueStatement[@dynamicPrecedence=1] { ckw<"continue"> }
+
+// Outranks `goto` read as a bare name followed by a `continue` statement.
+GotoStatement[@dynamicPrecedence=2] { ckw<"goto"> LabelName }
+
+LocalDeclaration {
+  kw<"local"> LocalAttribute? commaSep<localName> ("=" expressionList)?
+}
+
+localName { VariableDefinition (typeAnnotation | LocalAttribute)? }
+
+LocalAttribute { "<" AttributeName closeAngle }
+
+LocalFunctionDeclaration {
+  Attribute* kw<"local"> kw<"function"> VariableDefinition FunctionBody
+}
+
+FunctionDeclaration { Attribute* kw<"function"> FunctionName FunctionBody }
+
+FunctionName { VariableName ("." PropertyName)* (":" PropertyName)? }
+
+// Lua 5.5 global declarations. `global` stays usable as a name elsewhere.
+GlobalDeclaration[@dynamicPrecedence=1] {
+  ckw<"global"> (
+    kw<"function"> VariableDefinition FunctionBody |
+    LocalAttribute? ("*" | commaSep<localName> ("=" expressionList)?)
+  )
+}
+
+IfStatement {
+  kw<"if"> expression kw<"then"> Block ElseifClause* ElseClause? kw<"end">
+}
+
+ElseifClause { kw<"elseif"> expression kw<"then"> Block }
+
+ElseClause { kw<"else"> Block }
+
+WhileStatement { kw<"while"> expression kw<"do"> Block kw<"end"> }
+
+RepeatStatement { kw<"repeat"> Block kw<"until"> expression }
+
+DoStatement { kw<"do"> Block kw<"end"> }
+
+ForNumericStatement {
+  kw<"for"> VariableDefinition typeAnnotation? "=" expression "," expression ("," expression)?
+  kw<"do"> Block kw<"end">
+}
+
+ForGenericStatement {
+  kw<"for"> commaSep<forName> kw<"in"> expressionList kw<"do"> Block kw<"end">
+}
+
+forName { VariableDefinition typeAnnotation? }
+
+ReturnStatement { kw<"return"> expressionList? ";"? }
+
+TypeAlias[@dynamicPrecedence=1] {
+  ckw<"export">? ckw<"type"> TypeDefinition TypeParams? "=" ("|" | "&")? type
+}
+
+TypeFunction[@dynamicPrecedence=1] {
+  ckw<"export">? ckw<"type"> kw<"function"> TypeDefinition FunctionBody
+}
+
+// Expressions
+
+expression {
+  kw<"nil"> |
+  boolean |
+  Number |
+  String |
+  LongString |
+  InterpolatedString |
+  VarArgs |
+  FunctionExpression |
+  TableConstructor |
+  primary |
+  BinaryExpression |
+  UnaryExpression |
+  IfExpression |
+  TypeAssertion
+}
+
+expressionList { commaSep<expression> }
+
+primary {
+  VariableName |
+  ParenthesizedExpression |
+  MemberExpression |
+  CallExpression
+}
+
+ParenthesizedExpression { "(" expression ")" }
+
+MemberExpression {
+  primary !member ("." PropertyName | "[" expression "]")
+}
+
+CallExpression {
+  primary !call (":" PropertyName)? Arguments
+}
+
+Arguments {
+  "(" commaSep<expression>? ")" |
+  TableConstructor |
+  String |
+  LongString
+}
+
+FunctionExpression { Attribute* kw<"function"> FunctionBody }
+
+FunctionBody {
+  TypeParams? ParamList (":" type)? Block kw<"end">
+}
+
+ParamList { "(" commaSep<Parameter>? ")" }
+
+// Lua 5.5 names its varargs (`...rest`); Luau annotates them (`...: T`).
+Parameter { (VariableDefinition | VarArgs VariableDefinition?) typeAnnotation? }
+
+TableConstructor { "{" (Field (fieldSep Field)* fieldSep?)? "}" }
+
+Field {
+  "[" expression "]" "=" expression |
+  PropertyName "=" expression |
+  expression
+}
+
+fieldSep { "," | ";" }
+
+BinaryExpression {
+  expression !power ArithOp<"^"> expression |
+  expression !times ArithOp<"*" | "/" | "//" | "%"> expression |
+  expression !plus ArithOp<"+" | "-"> expression |
+  expression !concat ConcatOp expression |
+  expression !shift BitOp<"<<" | ">>"> expression |
+  expression !bitand BitOp<"&"> expression |
+  expression !bitxor BitOp<"~"> expression |
+  expression !bitor BitOp<"|"> expression |
+  expression !compare CompareOp expression |
+  expression !and kw<"and"> expression |
+  expression !or kw<"or"> expression
+}
+
+UnaryExpression {
+  !prefix (kw<"not"> | ArithOp<"-"> | LengthOp | BitOp<"~">) expression
+}
+
+IfExpression {
+  kw<"if"> expression kw<"then"> expression
+  (kw<"elseif"> expression kw<"then"> expression)*
+  kw<"else"> !ifElse expression
+}
+
+TypeAssertion { expression !cast "::" type }
+
+@skip {} {
+  InterpolatedString[isolate] {
+    interpolationStart (interpolationContent | Escape | Interpolation)* interpolationEnd
+  }
+}
+
+Interpolation { InterpolationStart expression "}" }
+
+@local tokens {
+  interpolationEnd[@name="`"] { "`" }
+  InterpolationStart[closedBy="}"] { "{" }
+  Escape { "\\" _ }
+  @else interpolationContent
+}
+
+// Luau types
+
+typeAnnotation { ":" type }
+
+type {
+  kw<"nil"> |
+  boolean |
+  String |
+  TypeReference |
+  TypeofType |
+  TableType |
+  ParenthesizedType |
+  FunctionType |
+  VariadicType |
+  GenericTypePack |
+  OptionalType |
+  UnionType |
+  IntersectionType
+}
+
+TypeReference { (ModuleName ".")? TypeName (!typeArgs TypeArgs)? }
+
+TypeArgs { "<" commaSep<type>? closeAngle }
+
+TypeParams { "<" commaSep<TypeParam> closeAngle }
+
+TypeParam { TypeDefinition "..."? ("=" type)? }
+
+TypeofType { ckw<"typeof"> "(" expression ")" }
+
+ParenthesizedType { typeList }
+
+FunctionType { TypeParams? typeList !typeArrow "->" type }
+
+typeList { "(" commaSep<typeListItem>? ")" }
+
+typeListItem { type | PropertyName ":" type }
+
+VariadicType { "..." type }
+
+GenericTypePack { TypeName "..." }
+
+OptionalType { type !typeOptional "?" }
+
+UnionType { type !typeUnion "|" type }
+
+IntersectionType { type !typeIntersection "&" type }
+
+TableType { "{" (tableTypeField (fieldSep tableTypeField)* fieldSep?)? "}" }
+
+tableTypeField { TypeIndexer | TypeProperty | type }
+
+TypeIndexer { typeAccess? "[" type "]" ":" type }
+
+TypeProperty { typeAccess? PropertyName ":" type }
+
+typeAccess { ckw<"read"> | ckw<"write"> }
+
+// Names
+
+VariableName { identifier }
+
+VariableDefinition { identifier }
+
+PropertyName { identifier }
+
+TypeName { identifier }
+
+TypeDefinition { identifier }
+
+ModuleName { identifier }
+
+LabelName { identifier }
+
+AttributeName { identifier }
+
+boolean { @specialize[@name=Boolean]<identifier, "true" | "false"> }
+
+kw<term> { @specialize[@name={term}]<identifier, term> }
+
+ckw<term> { @extend[@name={term}]<identifier, term> }
+
+commaSep<content> { content ("," content)* }
+
+ArithOp<ops> { ops }
+
+BitOp<ops> { ops }
+
+VarArgs { "..." }
+
+ConcatOp { ".." }
+
+LengthOp { "#" }
+
+CompareOp { "==" | "~=" | "<=" | ">=" | "<" | ">" }
+
+CompoundOp { "+=" | "-=" | "*=" | "/=" | "//=" | "%=" | "^=" | "..=" }
+
+@external tokens comments from "./tokens" { LineComment, BlockComment }
+
+@external tokens longStrings from "./tokens" { LongString }
+
+@external tokens labels from "./tokens" { Label }
+
+@external tokens angles from "./tokens" { closeAngle }
+
+@skip { whitespace | LineComment | BlockComment }
+
+@tokens {
+  whitespace { @whitespace+ }
+
+  identifierChar { @asciiLetter | "_" }
+
+  identifier { identifierChar (identifierChar | @digit)* }
+
+  digits { @digit (@digit | "_")* }
+
+  hexDigit { @digit | $[a-fA-F] }
+
+  exponent { $[eE] $[+\-]? @digit+ }
+
+  Number {
+    "0" $[xX] (hexDigit | "_")* ("." hexDigit*)? ($[pP] $[+\-]? @digit+)? |
+    "0" $[bB] $[01_]+ |
+    digits ("." (@digit | "_")*)? exponent? |
+    "." digits exponent?
+  }
+
+  // An unterminated string ends at the line break, as Lua reports it, so a
+  // quote being typed does not recolor the rest of the file.
+  String {
+    '"' (![\\\n"] | "\\" _)* '"'? |
+    "'" (![\\\n'] | "\\" _)* "'"?
+  }
+
+  interpolationStart[@name="`"] { "`" }
+
+  Attribute { "@" identifier }
+
+  @precedence { Number, "." }
+
+  "(" ")" "[" "]" "{" "}"
+  "." ".." "..." "," ";" ":" "::" "->" "=" "?" "|" "&" "~" "<<" ">>" "#"
+  "==" "~=" "<=" ">=" "<" ">"
+  "+" "-" "*" "/" "//" "%" "^"
+  "+=" "-=" "*=" "/=" "//=" "%=" "^=" "..="
+}
+
+@external propSource luaHighlighting from "./highlight"
+
+@detectDelim

@@ -12,15 +12,22 @@ Roblox services, instances, globals, Studio tooling, or static type analysis.
 ## What the playground includes
 
 - Lua 5.1, 5.2, 5.3, 5.4, 5.5, and Luau runtime selection per project.
+- An editor with Lua and Luau syntax highlighting, folding, and indentation from a
+  Lezer grammar; completion and hover docs for the selected runtime's standard
+  library, the file's own locals and table fields, Luau types, and `require` paths;
+  and StyLua formatting with Shift+Alt+F.
 - Multi-file projects with a selectable entry file.
 - `require("lib.module")`, `require("lib/module")`, and `init.lua` module aliases.
+  Luau also resolves `./`, `../`, and `@self` paths relative to the requiring module.
+- Luau's `task` library (`spawn`, `defer`, `delay`, `wait`, `cancel`) with real-time waits.
 - A compile-only **Check** action with per-file syntax diagnostics.
 - Preset stdin through `io.read()` in Lua and `read()` in Luau.
 - Live stdout and stderr, with status and elapsed time after each run finishes.
 - Source-only share links and lazy-loading iframe embeds.
 - Recovery drafts and named projects stored in IndexedDB.
 - Source-only `.weblua.json` import and export.
-- Thirteen built-in examples, including a multi-file capability tour.
+- Fourteen built-in examples, including a multi-file capability tour and a Luau
+  `task` project.
 
 ## Try the capability tour
 
@@ -41,7 +48,13 @@ and can be loaded with the playground's Import project button.
 Projects contain a runtime flavor, an entry path, and a map of normalized relative
 source paths. Lua 5.4 mounts those files into Wasmoon's virtual filesystem. Lua
 5.1–5.3 and 5.5 register the same paths through `package.preload`. Luau compiles every file
-and resolves modules through an in-VM browser-safe loader.
+and resolves modules through an in-VM browser-safe loader. That loader follows Luau's
+require-by-string rules: `./` and `../` resolve against the requiring module's folder
+(for an `init.luau`, the folder that contains it), `@self/` against the module itself,
+and other `@` aliases report an error. Luau's entry module runs as the main thread of an
+in-VM `task` scheduler, so top-level code can `task.wait`; the run ends when no task is
+left waiting. An error in the main thread fails the run, while an error in any other
+task is printed to stderr and the remaining tasks keep running.
 
 The **Check** action only compiles every source file. For Luau, this verifies syntax;
 it does not invoke the Luau Analysis library or report static type errors.
@@ -82,7 +95,13 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
 - Stop ends a run immediately, from the toolbar or with Esc.
 - Lua 5.4 has a 32 MiB runtime memory cap.
 - URL sharing has a 32 KiB encoded-payload cap.
-- The Luau runtime does not include Roblox APIs or a static type checker.
+- The Luau runtime does not include Roblox APIs or a static type checker. Its `task`
+  library is a language-level scheduler, not Roblox's engine loop.
+- `task.wait` uses real time with a one-frame (1/60 s) minimum, as on Roblox, so waits
+  count toward the run's time limit.
+- Formatting loads StyLua's WebAssembly build (about 0.9 MB compressed) on first use.
+  StyLua has no Lua 5.5 mode, so Lua 5.5 files are formatted as Lua 5.4 and code using
+  5.5-only syntax such as `global` reports a notice instead.
 - The virtual project filesystem only contains the source files supplied to the run.
 - Lua 5.4's `io.read` override and Luau's `read` helper support `*l`, `*L`, and
   `*a`. Lua 5.1–5.3 and 5.5 receive the preset input through their standard byte-stream stdin.
@@ -126,8 +145,15 @@ npm install
 npm run dev
 ```
 
-Open the local Vite URL. Press Ctrl/Cmd-Enter to run, or Ctrl/Cmd-Shift-Enter to
-compile-check every file.
+Open the local Vite URL. Press Ctrl/Cmd-Enter to run, Ctrl/Cmd-Shift-Enter to
+compile-check every file, or Shift+Alt+F to format the open file.
+
+The editor grammar lives in [`src/lang/lua/lua.grammar`](src/lang/lua/lua.grammar) and
+is compiled by `@lezer/generator`'s Vite plugin during dev, build, and tests. The
+standard-library catalog behind completion and hover,
+[`src/lang/lua/stdlib.ts`](src/lang/lua/stdlib.ts), is checked against every runtime
+by `stdlib.test.ts`, so a runtime upgrade that adds or removes a name fails the suite
+until the catalog is updated.
 
 ## Scripts
 
@@ -135,8 +161,8 @@ compile-check every file.
 - `npm run build` type-checks, builds, writes static `/playground` and `/embed`
   entry pages, and prerenders the landing page.
 - `npm run preview` serves the production build locally.
-- `npm test` runs the project, codec, persistence, routing, telemetry, and Luau
-  regression tests.
+- `npm test` runs the project, codec, persistence, routing, telemetry, editor language,
+  stdlib catalog, formatter, and Luau regression tests.
 
 ## Docker and self-hosting
 

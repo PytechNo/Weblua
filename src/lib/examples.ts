@@ -198,6 +198,48 @@ end
 print(first({ "one", "two" }))`
   },
   {
+    id: "luau-tasks",
+    title: "Luau tasks and modules",
+    project: assertProjectPayload({
+      flavor: "luau",
+      entry: "main.luau",
+      files: {
+        "main.luau": `-- task schedules coroutines. Waits are real time, so output streams in.
+local countdown = require("./lib/countdown")
+local log = require("./lib/log")
+
+task.spawn(countdown.run, "rocket", 3)
+task.delay(0.5, log.say, "delayed half a second")
+task.defer(log.say, "deferred until main yields")
+
+log.say("main waits")
+local waited = task.wait(1)
+log.say(string.format("main resumed after %.1fs", waited))`,
+        "lib/countdown.luau": `-- ./ is relative to this file, so this is lib/log.luau.
+local log = require("./log")
+
+local countdown = {}
+
+function countdown.run(label: string, from: number)
+  for n = from, 1, -1 do
+    log.say(\`{label}: {n}\`)
+    task.wait(0.4)
+  end
+  log.say(\`{label}: liftoff\`)
+end
+
+return countdown`,
+        "lib/log.luau": `local log = {}
+
+function log.say(message: string)
+  print(message)
+end
+
+return log`
+      }
+    })
+  },
+  {
     id: "capability-tour",
     title: "Multi-file capability tour",
     project: assertProjectPayload(capabilityTourDocument.project),
