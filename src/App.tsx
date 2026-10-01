@@ -1,8 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo } from "react";
 import { Landing } from "./components/Landing";
 import { getAppRoute } from "./lib/routes";
-
-type Theme = "dark" | "light";
+import { useTheme } from "./lib/theme";
 
 /**
  * The playground pulls in CodeMirror, the lint extensions, and the runtime
@@ -16,17 +15,7 @@ const Playground = lazy(() => import("./Playground"));
 export function App() {
   const route = useMemo(() => getAppRoute(), []);
   const isEmbed = route.mode === "embed";
-  const [theme, setTheme] = useState<Theme>(() =>
-    window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"
-  );
-
-  useEffect(() => {
-    document.body.dataset.theme = theme;
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
-  }, []);
+  const { theme, toggleTheme } = useTheme();
 
   // Fetch the playground chunk once the landing page is idle, so the hero CTA
   // still navigates into a warm cache without competing for the main thread

@@ -138,6 +138,22 @@
     </script>
   </head>
   <body>
+    <script>
+      // Apply the shared preference before the prerendered landing page paints.
+      (() => {
+        let theme;
+        try {
+          theme = window.localStorage.getItem("weblua:theme");
+        } catch {}
+        if (theme !== "dark" && theme !== "light") {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.body.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.querySelector('meta[name="theme-color"]').content =
+          theme === "dark" ? "#05070f" : "#f7f8fd";
+      })();
+    </script>
     <noscript>
       <style>
         .reveal {
