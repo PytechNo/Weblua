@@ -66,6 +66,7 @@ import {
   upsertProjectFile
 } from "./lib/project";
 import { runProject, type RunHandle } from "./lib/runner";
+import { selectionLayer } from "./lib/selectionLayer";
 import { reportRuntimeError, trackEvent } from "./lib/telemetry";
 import { DEFAULT_RUN_TIMEOUT_MS, EXTENDED_RUN_TIMEOUT_MS } from "./lib/types";
 import type {
@@ -635,7 +636,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
       luauIntelligence(() => ({ ...workspaceRef.current, typeMode: typeModeRef.current }))
     );
 
-    return [language, liveLinter, lintGutter()];
+    return [language, liveLinter, lintGutter(), selectionLayer];
   }, []);
 
   // A stable lint source no longer re-runs just because the extension array
