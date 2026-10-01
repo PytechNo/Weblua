@@ -195,6 +195,35 @@ export type AnalysisResponse =
   | { id: string; ok: true; result: AnalysisResults[keyof AnalysisResults] }
   | { id: string; ok: false; error: string };
 
+/** Luau's -O and -g levels. */
+export type CompilerLevel = 0 | 1 | 2;
+
+/** What the bytecode view asks the Luau compiler for. */
+export interface BytecodeOptions {
+  /** A `--!optimize` hot comment at the top of the file overrides this. */
+  optimizationLevel: CompilerLevel;
+  /** 0 keeps nothing, 1 line numbers and function names, 2 also local names. */
+  debugLevel: CompilerLevel;
+  /** Print each source line above the instructions compiled from it. */
+  source: boolean;
+}
+
+export type BytecodeResult =
+  | { ok: true; listing: string; compiler: string }
+  | { ok: false; message: string };
+
+export interface BytecodeRequest {
+  id: string;
+  source: string;
+  options: BytecodeOptions;
+}
+
+/** `result` is null when the compiler itself failed to load. */
+export interface BytecodeResponse {
+  id: string;
+  result: BytecodeResult | null;
+}
+
 export interface ExampleSnippet extends SnippetPayload {
   id: string;
   title: string;

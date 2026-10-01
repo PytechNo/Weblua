@@ -188,7 +188,7 @@ const FEATURES = [
   {
     icon: Braces,
     title: "Lua 5.1–5.5 and Luau",
-    body: "Choose Lua 5.1 through 5.5 or the Luau language, with Luau's task library, require-by-string paths, and type checking as you type. Weblua is not Roblox Studio and does not provide Roblox APIs."
+    body: "Choose Lua 5.1 through 5.5 or the Luau language, with Luau's task library, require-by-string paths, type checking as you type, and a bytecode view. Weblua is not Roblox Studio and does not provide Roblox APIs."
   },
   {
     icon: Link,
@@ -255,7 +255,7 @@ const COMPARISON: Array<{ feature: string; support: readonly [boolean, boolean, 
   { feature: "Multi-file projects", support: [true, true, true] },
   { feature: "Luau's task library", support: [true, false, true] },
   { feature: "Share links and iframe embeds", support: [true, true, false] },
-  { feature: "Bytecode view", support: [false, true, false] },
+  { feature: "Bytecode view", support: [true, true, false] },
   { feature: "Roblox APIs and instances", support: [false, false, true] }
 ];
 
@@ -275,6 +275,10 @@ const FAQS = [
   {
     q: "Does Weblua type-check Luau?",
     a: "Yes. Luau's own type checker underlines errors as you type, and the Check action reports type errors and lints for every file. Strict mode is the default, and --!strict, --!nonstrict, and --!nocheck comments work per file. It knows the Luau standard library, not Roblox APIs. Lua 5.x projects get syntax diagnostics only."
+  },
+  {
+    q: "Can I see the bytecode Luau compiles to?",
+    a: "Yes. In a Luau project, the output pane's Bytecode tab lists the open file's bytecode as you edit, with optimization and debug levels from 0 to 2 and optional source lines. Runs compile at optimization level 1; a --!optimize 2 comment at the top of a file raises it for runs too."
   },
   {
     q: "Can I use Weblua offline?",
@@ -609,8 +613,8 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <a href="https://play.luau.org/" target="_blank" rel="noreferrer">
               play.luau.org
             </a>
-            : reach for it to read bytecode or try the older type solver. For anything that touches
-            Roblox APIs, use Roblox Studio.
+            : reach for it to try the older type solver. For anything that touches Roblox APIs, use
+            Roblox Studio.
           </p>
         </section>
 

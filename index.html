@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Free online Luau and Lua playground. Run Luau and Lua 5.1–5.5 in your browser with multiple files, Luau type checking, and shareable links. No account, no install." />
-    <meta name="keywords" content="run lua online,lua playground,luau playground,lua compiler online,luau type checker,luau type checking,luau strict mode,online luau editor,lua 5.1,lua 5.2,lua 5.3,lua 5.4,lua 5.5,luau" />
+    <meta name="keywords" content="run lua online,lua playground,luau playground,lua compiler online,luau type checker,luau type checking,luau strict mode,online luau editor,luau bytecode,lua 5.1,lua 5.2,lua 5.3,lua 5.4,lua 5.5,luau" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Weblua" />
     <meta property="og:locale" content="en_US" />
@@ -48,6 +48,7 @@
           "Luau runtime with the task library",
           "Luau type checking and linting as you type, in strict or nonstrict mode",
           "Type-aware completion and hover types",
+          "Luau bytecode view with optimization and debug levels",
           "Multi-file projects with require",
           "StyLua formatting",
           "Share links, GitHub gist links, and iframe embeds"
@@ -98,6 +99,14 @@
             "acceptedAnswer": {
               "@type": "Answer",
               "text": "Yes. Luau's own type checker underlines errors as you type, and the Check action reports type errors and lints for every file. Strict mode is the default, and --!strict, --!nonstrict, and --!nocheck comments work per file. It knows the Luau standard library, not Roblox APIs. Lua 5.x projects get syntax diagnostics only."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I see the bytecode Luau compiles to?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. In a Luau project, the output pane's Bytecode tab lists the open file's bytecode as you edit, with optimization and debug levels from 0 to 2 and optional source lines. Runs compile at optimization level 1; a --!optimize 2 comment at the top of a file raises it for runs too."
             }
           },
           {

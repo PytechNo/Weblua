@@ -8,6 +8,8 @@ since play.luau.org changes too.
 
 - play.luau.org has type checking, multiple files, share links, embeds, a bytecode
   view, and solver/compiler settings. It has no `task` library and runs only Luau.
+  Weblua now has a bytecode view with optimization and debug levels too, but no
+  solver choice.
 - Weblua's example menu has **Luau typed modules**, which shows types crossing a
   `require`. Point people at it rather than pasting a long `#c=` link: that example
   alone makes an 877-character link.
@@ -35,6 +37,8 @@ playground for testing Luau in a browser tab, without opening Studio.
   folders.
 - **The `task` library**: `task.spawn`, `defer`, `delay`, `wait`, and `cancel`, with
   real waits, so output streams in as it prints.
+- **A bytecode view**: see what the compiler makes of a file at each optimization
+  level, including what `--!optimize 2` inlines.
 - **StyLua formatting** (Shift+Alt+F), **share links**, **iframe embeds**, and saved
   projects in your browser.
 - It also runs **Lua 5.1 through 5.5**, handy for checking how a snippet behaves
@@ -79,11 +83,13 @@ On the Luau side:
   analyzer's module resolution mirrors the runtime's, so types flow between files.
 - A small `task` scheduler written in Luau (`spawn`, `defer`, `delay`, `wait`,
   `cancel`) runs on real time, so top-level code can `task.wait`.
+- A bytecode tab lists the open file at optimization and debug levels 0–2, with
+  remarks and source lines. Runs honor `--!optimize`.
 - Runs execute in a Web Worker; nothing is sent to a server.
 
-play.luau.org is still the place for bytecode, the old solver, and compiler settings,
-and I point people there for those. Weblua's niche is multi-file projects with `task`,
-and comparing a snippet against Lua 5.1–5.5 in the same tool.
+play.luau.org is still the place to try the old solver, and I point people there for
+that. Weblua's niche is multi-file projects with `task`, and comparing a snippet
+against Lua 5.1–5.5 in the same tool.
 
 One caveat I'd welcome advice on: the analyzer and the runtime come from different
 Luau releases, so very new syntax can pass one and not the other. If there's a better

@@ -1962,7 +1962,8 @@ body[data-theme="light"] .orb {
   letter-spacing: 0.06em;
 }
 
-.type-mode select {
+.type-mode select,
+.bytecode-options select {
   height: 26px;
   padding: 0 6px 0 8px;
   border: 1px solid var(--border);
@@ -1977,7 +1978,8 @@ body[data-theme="light"] .orb {
   transition: border-color 160ms ease;
 }
 
-.type-mode select:hover {
+.type-mode select:hover,
+.bytecode-options select:hover:enabled {
   border-color: var(--border-strong);
 }
 
@@ -2155,6 +2157,46 @@ body[data-theme="light"] .orb {
   font-family: var(--font-mono);
 }
 
+.output-header .output-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Output and Bytecode share the pane; only Luau projects get the switch. */
+.output-header .output-tabs {
+  align-self: flex-start;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.output-tabs button {
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.output-tabs button:hover {
+  color: var(--text);
+}
+
+.output-tabs button[aria-pressed="true"] {
+  background: var(--button-hover);
+  color: var(--text);
+}
+
 .status-dot {
   position: relative;
   flex: 0 0 auto;
@@ -2328,6 +2370,89 @@ body[data-theme="light"] .orb {
 
 .output-system {
   color: var(--system);
+}
+
+.bytecode-options {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.bytecode-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bytecode-options input {
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.bytecode-options :disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bytecode-override {
+  color: var(--warning);
+  font-family: var(--font-mono);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/* Columns matter more than fitting the pane: long lines scroll sideways
+   rather than wrap under the gutter. */
+.bytecode-listing {
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.bc-line {
+  display: block;
+}
+
+.bc-gutter,
+.bc-local {
+  color: var(--muted-2);
+}
+
+.bc-function {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.bc-op {
+  color: var(--primary-soft);
+  font-weight: 600;
+}
+
+.bc-label {
+  color: var(--warning);
+}
+
+.bc-source {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.bc-remark {
+  color: var(--system);
+}
+
+.bytecode-error p {
+  color: var(--danger);
 }
 
 .seo-line {

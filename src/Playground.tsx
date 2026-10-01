@@ -50,7 +50,13 @@ import {
 } from "./lib/examples";
 import { gistHash, gistIdFrom, loadGistProject, readGistHash } from "./lib/gist";
 import { onLuauAnalysisReady, warmLuauAnalysis } from "./lib/luauAnalysis";
-import { readLuauTypeMode, storeLuauTypeMode } from "./lib/preferences";
+import { dumpLuauBytecode, optimizeHotComment, parseBytecodeListing } from "./lib/luauBytecode";
+import {
+  readBytecodeOptions,
+  readLuauTypeMode,
+  storeBytecodeOptions,
+  storeLuauTypeMode
+} from "./lib/preferences";
 import {
   createDefaultWorkspace,
   deleteProjectFile,
@@ -63,6 +69,9 @@ import { runProject, type RunHandle } from "./lib/runner";
 import { reportRuntimeError, trackEvent } from "./lib/telemetry";
 import { DEFAULT_RUN_TIMEOUT_MS, EXTENDED_RUN_TIMEOUT_MS } from "./lib/types";
 import type {
+  BytecodeOptions,
+  BytecodeResult,
+  CompilerLevel,
   Diagnostic,
   LuauTypeMode,
   OutputChunk,
@@ -93,6 +102,17 @@ const typeModeOptions: Array<{ value: LuauTypeMode; label: string }> = [
   { value: "nonstrict", label: "Nonstrict" },
   { value: "off", label: "Off" }
 ];
+
+const compilerLevels: CompilerLevel[] = [0, 1, 2];
+
+/** Pause after the last keystroke before the open file is recompiled. */
+const BYTECODE_DELAY_MS = 250;
+
+type OutputTab = "output" | "bytecode";
+
+type BytecodeState =
+  | { status: "ready"; file: string; result: BytecodeResult }
+  | { status: "unavailable" };
 
 const sharedEditorChrome = {
   "&": {
@@ -283,6 +303,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const [copiedOutput, setCopiedOutput] = useState(false);
   const [inputOpen, setInputOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [outputTab, setOutputTab] = useState<OutputTab>("output");
+  const [bytecodeOptions, setBytecodeOptions] = useState<BytecodeOptions>(readBytecodeOptions);
+  /** The open file's listing. Null until the compiler first answers. */
+  const [bytecode, setBytecode] = useState<BytecodeState | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const skipNextAutosave = useRef(false);
@@ -302,6 +326,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     typeModeRef.current = typeMode;
     storeLuauTypeMode(typeMode);
   }, [typeMode]);
+
+  useEffect(() => {
+    storeBytecodeOptions(bytecodeOptions);
+  }, [bytecodeOptions]);
 
   const refreshProjects = useCallback(async () => {
     if (isEmbed) return;
@@ -386,6 +414,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     const timeoutMs = longRuns ? EXTENDED_RUN_TIMEOUT_MS : DEFAULT_RUN_TIMEOUT_MS;
     setIsRunning(true);
     setNotice(null);
+    setOutputTab("output");
 
     try {
       // Output is accumulated outside state: several worker messages can
@@ -442,6 +471,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const runCheck = useCallback(async () => {
     setIsChecking(true);
     setNotice(null);
+    setOutputTab("output");
 
     try {
       const isLuau = workspace.project.flavor === "luau";
@@ -633,6 +663,35 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     return unsubscribe;
   }, [editorReady, wantsAnalysis]);
 
+  // Only Luau has a compiler to show; switching a project to Lua 5.x falls back
+  // to the output tab without forgetting the choice.
+  const showBytecode = outputTab === "bytecode" && workspace.project.flavor === "luau";
+  const optimizeOverride = showBytecode ? optimizeHotComment(activeCode) : null;
+
+  // The last listing stays up while the next compiles, so typing does not
+  // flash the pane.
+  useEffect(() => {
+    if (!showBytecode) return;
+
+    let cancelled = false;
+    const file = workspace.activeFile;
+    const timer = window.setTimeout(() => {
+      void dumpLuauBytecode(activeCode, bytecodeOptions).then((result) => {
+        if (!cancelled) setBytecode(result ? { status: "ready", file, result } : { status: "unavailable" });
+      });
+    }, BYTECODE_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeCode, bytecodeOptions, showBytecode, workspace.activeFile]);
+
+  const openBytecode = () => {
+    if (!showBytecode) trackEvent("open_bytecode");
+    setOutputTab("bytecode");
+  };
+
   const loadExample = (id: string) => {
     const example = examples.find((item) => item.id === id);
     if (!example) return;
@@ -744,11 +803,15 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     window.setTimeout(() => setCopiedInput(false), 1500);
   };
 
+  const bytecodeListing = bytecode?.status === "ready" && bytecode.result.ok ? bytecode.result.listing : "";
+
   const copyOutput = async () => {
-    const text = (result?.chunks ?? []).map((chunk) => chunk.text).join("\n");
+    const text = showBytecode
+      ? bytecodeListing
+      : (result?.chunks ?? []).map((chunk) => chunk.text).join("\n");
     await navigator.clipboard.writeText(text);
     setCopiedOutput(true);
-    trackEvent("copy_output", { flavor: workspace.project.flavor });
+    trackEvent(showBytecode ? "copy_bytecode" : "copy_output", { flavor: workspace.project.flavor });
     window.setTimeout(() => setCopiedOutput(false), 1500);
   };
 
@@ -1039,7 +1102,13 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
               <Timer size={15} />
               <SwapLabel widest="30 s">{longRuns ? "30 s" : "5 s"}</SwapLabel>
             </button>
-            <button className="button" type="button" onClick={runCheck} disabled={isChecking} title="Compile all files without running (Ctrl+Shift+Enter)">
+            <button
+              className="button"
+              type="button"
+              onClick={runCheck}
+              disabled={isChecking}
+              title={`${wantsAnalysis ? "Compile and type-check" : "Compile"} all files without running (Ctrl+Shift+Enter)`}
+            >
               <ShieldCheck size={16} />
               <SwapLabel widest="Checking">{isChecking ? "Checking" : "Check"}</SwapLabel>
             </button>
@@ -1148,26 +1217,101 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
             </div>
           </section>
 
-          <aside className="output-pane" aria-label="Execution output">
+          <aside className="output-pane" aria-label={showBytecode ? "Bytecode" : "Execution output"}>
             <div className="output-header">
               <span className={`status-dot status-${statusKind}`} aria-hidden="true" />
               <div>
-                <strong>Output</strong>
-                <span aria-live="polite">{isRunning ? "running..." : result ? formatRunMeta(result) : "Ready"}</span>
+                {workspace.project.flavor === "luau" ? (
+                  <span className="output-tabs" role="group" aria-label="Output pane">
+                    <button type="button" aria-pressed={!showBytecode} onClick={() => setOutputTab("output")}>Output</button>
+                    <button type="button" aria-pressed={showBytecode} onClick={openBytecode} title="The bytecode Luau compiles the open file to">Bytecode</button>
+                  </span>
+                ) : (
+                  <strong>Output</strong>
+                )}
+                <span className="output-meta" aria-live="polite">
+                  {showBytecode
+                    ? formatBytecodeMeta(bytecode)
+                    : isRunning ? "running..." : result ? formatRunMeta(result) : "Ready"}
+                </span>
               </div>
-              <button className="icon-button text-icon" type="button" onClick={() => setInputOpen((open) => !open)} title={inputOpen ? "Hide input" : "Show input"} aria-label={inputOpen ? "Hide input" : "Show input"} aria-expanded={inputOpen}>
-                <Plus className={inputOpen ? "input-toggle is-open" : "input-toggle"} size={16} />
-              </button>
-              <button className="icon-button text-icon" type="button" onClick={copyOutput} disabled={!result?.chunks.length} title="Copy output" aria-label="Copy output">
+              {!showBytecode && (
+                <button className="icon-button text-icon" type="button" onClick={() => setInputOpen((open) => !open)} title={inputOpen ? "Hide input" : "Show input"} aria-label={inputOpen ? "Hide input" : "Show input"} aria-expanded={inputOpen}>
+                  <Plus className={inputOpen ? "input-toggle is-open" : "input-toggle"} size={16} />
+                </button>
+              )}
+              <button
+                className="icon-button text-icon"
+                type="button"
+                onClick={copyOutput}
+                disabled={showBytecode ? !bytecodeListing : !result?.chunks.length}
+                title={showBytecode ? "Copy bytecode" : "Copy output"}
+                aria-label={showBytecode ? "Copy bytecode" : "Copy output"}
+              >
                 {copiedOutput ? <Check size={16} /> : <Copy size={16} />}
               </button>
-              <button className="icon-button text-icon" type="button" onClick={() => setResult(null)} title="Clear output" aria-label="Clear output"><Trash2 size={16} /></button>
+              {!showBytecode && (
+                <button className="icon-button text-icon" type="button" onClick={() => setResult(null)} title="Clear output" aria-label="Clear output"><Trash2 size={16} /></button>
+              )}
             </div>
-            {/* Keyed by run, not by message: the pending, streamed, and final
-                results share an id, so the stream mounts once per run and replays
-                its enter animation only when a new run starts. */}
-            <OutputView key={result?.id ?? "empty"} chunks={result?.chunks ?? []} isRunning={isRunning} />
-            {inputOpen && (
+            {showBytecode ? (
+              <>
+                <div className="bytecode-options">
+                  <label
+                    title={
+                      optimizeOverride === null
+                        ? "Optimization level. Runs compile at 1. A --!optimize 0, 1, or 2 comment at the top of a file sets the level for runs and for this listing."
+                        : `This file's --!optimize ${optimizeOverride} comment sets the level, for runs and for this listing.`
+                    }
+                  >
+                    <span>Optimize</span>
+                    <select
+                      value={optimizeOverride ?? bytecodeOptions.optimizationLevel}
+                      disabled={optimizeOverride !== null}
+                      onChange={(event) =>
+                        setBytecodeOptions((current) => ({
+                          ...current,
+                          optimizationLevel: Number(event.target.value) as CompilerLevel
+                        }))
+                      }
+                    >
+                      {compilerLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+                    </select>
+                  </label>
+                  <label title="Debug info: 0 keeps none, 1 keeps line numbers and function names (as runs do), 2 also keeps local names.">
+                    <span>Debug</span>
+                    <select
+                      value={bytecodeOptions.debugLevel}
+                      onChange={(event) =>
+                        setBytecodeOptions((current) => ({
+                          ...current,
+                          debugLevel: Number(event.target.value) as CompilerLevel
+                        }))
+                      }
+                    >
+                      {compilerLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+                    </select>
+                  </label>
+                  <label title="Show each source line above the instructions compiled from it. Needs debug level 1 or 2.">
+                    <input
+                      type="checkbox"
+                      checked={bytecodeOptions.source && bytecodeOptions.debugLevel > 0}
+                      disabled={bytecodeOptions.debugLevel === 0}
+                      onChange={(event) => setBytecodeOptions((current) => ({ ...current, source: event.target.checked }))}
+                    />
+                    <span>Source</span>
+                  </label>
+                  {optimizeOverride !== null && <span className="bytecode-override">Set by --!optimize</span>}
+                </div>
+                <BytecodeView state={bytecode} />
+              </>
+            ) : (
+              /* Keyed by run, not by message: the pending, streamed, and final
+                 results share an id, so the stream mounts once per run and replays
+                 its enter animation only when a new run starts. */
+              <OutputView key={result?.id ?? "empty"} chunks={result?.chunks ?? []} isRunning={isRunning} />
+            )}
+            {!showBytecode && inputOpen && (
               <section className="input-drawer" aria-label="Preset standard input">
                 <label htmlFor="stdin-input">Input <span>{workspace.project.flavor === "luau" ? "read()" : "io.read()"}</span></label>
                 <textarea id="stdin-input" value={workspace.stdin} onChange={(event) => updateWorkspace((current) => ({ ...current, stdin: event.target.value }))} placeholder="One line per read. This input stays in this browser." spellCheck={false} />
@@ -1240,6 +1384,69 @@ function OutputView({ chunks, isRunning }: { chunks: OutputChunk[]; isRunning: b
   };
 
   return <pre className="output-stream" ref={streamRef} onScroll={trackPin}>{chunks.map((chunk, index) => <span className={`output-line output-${chunk.kind}`} key={`${chunk.kind}-${index}`}>{chunk.text}{"\n"}</span>)}</pre>;
+}
+
+function BytecodeView({ state }: { state: BytecodeState | null }) {
+  const lines = useMemo(
+    () => (state?.status === "ready" && state.result.ok ? parseBytecodeListing(state.result.listing) : []),
+    [state]
+  );
+
+  if (!state) {
+    return <div className="empty-output"><p>Loading the Luau compiler. It downloads once, about 0.8 MB.</p></div>;
+  }
+  if (state.status === "unavailable") {
+    return (
+      <div className="empty-output">
+        <p>The Luau compiler could not load. Check your connection, then edit the file or change an option to try again.</p>
+      </div>
+    );
+  }
+  if (!state.result.ok) {
+    return (
+      <div className="empty-output bytecode-error">
+        <p>{state.file} does not compile: {state.result.message}. The editor underlines what to fix.</p>
+      </div>
+    );
+  }
+
+  // Source, remark, and local lines get a blank gutter, so code lines up under
+  // the source it came from.
+  const width = Math.max(1, ...lines.map((line) => (line.kind === "instruction" ? line.line.length : 0)));
+  const gutter = (text = "") => <span className="bc-gutter">{text.padStart(width)}{text ? ":" : " "} </span>;
+
+  return (
+    <pre className="output-stream bytecode-listing">
+      {lines.map((line, index) => {
+        switch (line.kind) {
+          case "instruction":
+            return (
+              <span className="bc-line" key={index}>
+                {gutter(line.line)}
+                {line.label && <span className="bc-label">{line.label}: </span>}
+                <span className="bc-op">{line.opcode}</span>
+                {line.operands}
+                {"\n"}
+              </span>
+            );
+          case "source":
+            return <span className="bc-line bc-source" key={index}>{gutter()}{line.code}{"\n"}</span>;
+          case "remark":
+          case "local":
+            return <span className={`bc-line bc-${line.kind}`} key={index}>{gutter()}{line.text}{"\n"}</span>;
+          default:
+            return <span className={`bc-line bc-${line.kind}`} key={index}>{line.text}{"\n"}</span>;
+        }
+      })}
+    </pre>
+  );
+}
+
+function formatBytecodeMeta(state: BytecodeState | null): string {
+  if (!state) return "loading the compiler...";
+  if (state.status === "unavailable") return "compiler unavailable";
+  if (!state.result.ok) return `${state.file} does not compile`;
+  return `${state.file} · Luau ${state.result.compiler}`;
 }
 
 function formatRunMeta(result: RunResult): string {

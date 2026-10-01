@@ -327,3 +327,45 @@ describe("luau require-by-string", () => {
     expect(stderrOf(alias).join("\n")).toContain("unknown require alias '@lune'");
   });
 });
+
+// The bytecode view tells people runs compile at level 1 and that a
+// --!optimize comment changes it; luau-web exposes no compiler options, so
+// these pin both claims to observable behavior.
+describe("luau optimization level", () => {
+  const project = (main: string, files: Record<string, string> = {}): ProjectPayload => ({
+    flavor: "luau",
+    entry: "main.luau",
+    files: { "main.luau": main, ...files }
+  });
+
+  it("compiles runs at level 1 unless the file sets --!optimize", async () => {
+    // From level 1 up, math.floor is an import resolved when main loads, so a
+    // module that replaces math afterwards does not reach it. Level 0 looks the
+    // global up at the call.
+    const patch = { "patch.luau": `math = { floor = function() return "patched" end }\nreturn nil` };
+    const main = `require("./patch")\nprint(math.floor(1.5))`;
+
+    for (const [header, expected] of [["", "1"], ["--!optimize 0\n", "patched"], ["--!optimize 1\n", "1"]]) {
+      const result = await runProjectForTest(project(header + main, patch));
+      expect(stdoutOf(result), header || "no hot comment").toEqual([expected]);
+    }
+  });
+
+  it("inlines local functions under --!optimize 2", async () => {
+    // An inlined function leaves no frame of its own in the traceback.
+    const main = [
+      "local function trace(): string",
+      "  local s = debug.traceback()",
+      "  return s",
+      "end",
+      "local s = trace()",
+      "print(s)"
+    ].join("\n");
+
+    const level1 = stdoutOf(await runProjectForTest(project(main))).join("\n");
+    const level2 = stdoutOf(await runProjectForTest(project(`--!optimize 2\n${main}`))).join("\n");
+
+    expect(level1).toContain("function trace");
+    expect(level2).not.toContain("function trace");
+  });
+});

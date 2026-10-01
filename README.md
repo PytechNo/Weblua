@@ -25,6 +25,7 @@ or Studio tooling.
   per-file syntax diagnostics (and, for Luau, type errors and lints).
 - Luau type checking and linting as you type, in strict or nonstrict mode, with
   autocomplete and hover types.
+- A Luau bytecode view with optimization and debug levels.
 - Preset stdin through `io.read()` in Lua and `read()` in Luau.
 - Live stdout and stderr, with status and elapsed time after each run finishes.
 - Source-only share links, GitHub gist links, and lazy-loading iframe embeds.
@@ -93,6 +94,27 @@ Output is streamed from the worker as it is produced. The page batches display
 updates and keeps received output when a run is stopped or times out. Completed
 runs also return their full output with the final result.
 
+## Luau bytecode
+
+In a Luau project, the output pane's **Bytecode** tab lists what Luau's compiler
+makes of the open file, and updates as you edit. The compiler is a second
+WebAssembly build from `@luau-rs/luau` (about 0.8 MB compressed), loaded in its own
+worker the first time the tab opens.
+
+- **Optimize** sets the level from 0 to 2. Level 2 inlines small local functions and
+  folds constants, and `REMARK` lines in the listing say what it did.
+- **Debug** sets the debug info kept: 0 none, 1 line numbers and function names,
+  2 also local variable names, which the listing prints per function.
+- **Source** prints each source line above the instructions compiled from it.
+
+Runs compile at optimization level 1. A `--!optimize 0`, `1`, or `2` comment at the
+top of a file sets the level for that file's runs as well as its listing, and the
+**Optimize** menu shows when one does. The runtime offers no other compiler options,
+so the **Debug** menu only changes the listing.
+
+The listing comes from the same Luau release as the type checker, which can differ
+from the runtime's, so small details may not match the bytecode a run executes.
+
 ## Sharing, embeds, and persistence
 
 Current share links encode a source-only project as `/playground#c=2...`. The map is
@@ -151,6 +173,7 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
   loop.
 - `task.wait` uses real time with a one-frame (1/60 s) minimum, as on Roblox, so waits
   count toward the run's time limit.
+- The bytecode view lists Luau only; Lua 5.x runtimes have no listing.
 - Formatting loads StyLua's WebAssembly build (about 0.9 MB compressed) on first use.
   StyLua has no Lua 5.5 mode, so Lua 5.5 files are formatted as Lua 5.4 and code using
   5.5-only syntax such as `global` reports a notice instead.
@@ -217,7 +240,8 @@ until the catalog is updated.
   entry pages, and prerenders the landing page.
 - `npm run preview` serves the production build locally.
 - `npm test` runs the project, codec, gist, persistence, routing, telemetry, editor
-  language, stdlib catalog, formatter, Luau regression, and Luau analysis tests.
+  language, stdlib catalog, formatter, Luau regression, Luau analysis, and Luau
+  bytecode tests.
 
 ## Docker and self-hosting
 

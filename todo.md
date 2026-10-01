@@ -175,6 +175,22 @@ build of `Luau.Analysis` and tracking upstream releases.
 
 ---
 
+### 8. Compiler settings (play.luau.org parity)
+
+- [x] **Type mode setting**: the Types menu (see 6).
+- [x] **Bytecode view**: an output-pane tab for Luau projects, from the compiler in
+  `@luau-rs/luau`'s runtime build (`Lua.dump`), in its own lazily loaded worker
+  (~830 KB gzip). Optimize and Debug levels 0–2, optional source lines, remarks.
+- [x] **Compiler options for runs**: luau-web takes source only, so the only lever
+  is the `--!optimize` hot comment, which it honors. Runs default to level 1. Both
+  are pinned by tests in `luauExecution.test.ts`. The debug level cannot change.
+- [ ] **Type solver toggle**: the analysis wasm contains both solvers (the
+  `LuauSolverV2` flag is in the binary), but `@luau-rs/luau` exposes no way to set
+  it. Ask upstream for a solver option, or get it with an owned build (see the
+  download-size item in 6).
+
+---
+
 ### Deferred — needs a product decision first
 - **Standalone-runtime namespace (Lute)**: `fs`, `serde`, and a `@lute/*`/`@std/*`
   veneer only serve standalone-runtime users; Roblox has no `fs`. If pursued, target
