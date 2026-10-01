@@ -20,7 +20,11 @@ export default defineConfig({
   // compiled grammar module, and StyLua only on the first format. Listing
   // them avoids a full page reload the first time each one loads.
   optimizeDeps: {
-    include: ["@lezer/lr", "@johnnymorganz/stylua/web"]
+    include: ["@lezer/lr", "@johnnymorganz/stylua/web"],
+    // The Luau analyzer finds its wasm with `new URL("...wasm", import.meta.url)`.
+    // Pre-bundling moves the JS into .vite/deps and leaves the wasm behind, so
+    // the dev server serves this package straight from node_modules instead.
+    exclude: ["@luau-rs/luau"]
   },
   worker: {
     format: "es"

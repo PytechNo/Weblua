@@ -40,7 +40,10 @@ export function stdlibEntryFor(state: EditorState, name: string): StdlibEntry | 
   return stdlibFor(flavor).get(name) ?? STDLIB.find((entry) => entry.name === name) ?? null;
 }
 
-export const luaHover = hoverTooltip((view, pos, side) => {
+export type HoverSource = Parameters<typeof hoverTooltip>[0];
+
+/** Documentation for the stdlib name under the pointer. */
+export const luaHoverSource = ((view, pos, side) => {
   const node = syntaxTree(view.state).resolveInner(pos, side);
   const name = stdlibNameAt(view.state, node);
   const entry = name ? stdlibEntryFor(view.state, name) : null;
@@ -53,4 +56,6 @@ export const luaHover = hoverTooltip((view, pos, side) => {
     above: true,
     create: () => ({ dom: renderStdlibDoc(entry, flavor) })
   };
-});
+}) satisfies HoverSource;
+
+export const luaHover = hoverTooltip(luaHoverSource);

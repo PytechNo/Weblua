@@ -187,7 +187,7 @@ const FEATURES = [
   {
     icon: Braces,
     title: "Lua 5.1–5.5 and Luau",
-    body: "Choose Lua 5.1 through 5.5 or the Luau language, with Luau's task library and require-by-string paths. Weblua is not Roblox Studio and does not provide Roblox APIs or static type analysis."
+    body: "Choose Lua 5.1 through 5.5 or the Luau language, with Luau's task library, require-by-string paths, and type checking as you type. Weblua is not Roblox Studio and does not provide Roblox APIs."
   },
   {
     icon: Link,
@@ -207,7 +207,7 @@ const FEATURES = [
   {
     icon: Keyboard,
     title: "Keyboard-first",
-    body: "Ctrl+Enter to run, Esc to stop, Shift+Alt+F to format with StyLua. Completion and hover docs follow the selected runtime's standard library, with folding and Lua and Luau syntax highlighting."
+    body: "Ctrl+Enter to run, Esc to stop, Shift+Alt+F to format with StyLua. Completion and hover docs follow the selected runtime's standard library, with checked Luau types, folding, and Lua and Luau syntax highlighting."
   }
 ] as const;
 
@@ -233,9 +233,9 @@ const BOUNDARIES = [
       "Luau code can use language features such as annotations and generics, plus the task library, but Weblua does not emulate Roblox services, instances, globals, or Studio tooling."
   },
   {
-    title: "Compile check, not type checking",
+    title: "Luau types, not Roblox's",
     body:
-      "Check compiles every file and reports syntax diagnostics. It does not run Luau's static analyzer, infer types, or validate a project against Roblox APIs."
+      "Check compiles every file, and type-checks and lints Luau with Luau's own analyzer. The analyzer knows the Luau standard library and Weblua's additions, not Roblox APIs, so it cannot validate a project against them."
   },
   {
     title: "Purposefully bounded runs",
@@ -259,7 +259,7 @@ const FAQS = [
   },
   {
     q: "Does Weblua type-check Luau?",
-    a: "No. The Check action compiles every source file and reports syntax diagnostics. It does not invoke Luau's static type analyzer, even though Luau annotations and generic syntax can be compiled and executed."
+    a: "Yes. Luau's own type checker underlines errors as you type, and the Check action reports type errors and lints for every file. Strict mode is the default, and --!strict, --!nonstrict, and --!nocheck comments work per file. It knows the Luau standard library, not Roblox APIs. Lua 5.x projects get syntax diagnostics only."
   },
   {
     q: "Can I use Weblua offline?",

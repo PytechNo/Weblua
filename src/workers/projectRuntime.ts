@@ -1,5 +1,6 @@
 import type { LuaFactory } from "wasmoon";
 import { parseCompileError } from "../lib/diagnostics";
+import { buildModuleAliases } from "../lib/moduleAliases";
 import { DEFAULT_RUN_TIMEOUT_MS } from "../lib/types";
 import type {
   CheckResult,
@@ -10,6 +11,8 @@ import type {
   RunResult,
   RuntimeFlavor
 } from "../lib/types";
+
+export { buildModuleAliases, isInitModule } from "../lib/moduleAliases";
 
 const LUA_OK = 0;
 const LUA_MEMORY_LIMIT = 32 * 1024 * 1024;
@@ -1048,6 +1051,8 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
     return nil
   end
 
+  -- resolveLuauRequire in src/lib/moduleAliases.ts mirrors this for the type
+  -- checker, so change both together.
   local function resolveModule(name)
     if stringSub(name, 1, 2) == "./" or stringSub(name, 1, 3) == "../" or stringSub(name, 1, 6) == "@self/" then
       local target = resolveRelative(name, requiringModule())
@@ -1104,42 +1109,6 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
     return loadModule(path)
   end
 `;
-
-export function buildModuleAliases(files: Record<string, string>): Record<string, string> {
-  const aliases: Record<string, string> = {};
-  const entries = Object.keys(files).sort((a, b) => a.localeCompare(b));
-
-  // Direct module files take precedence over directory index modules.
-  for (const path of entries.filter((file) => !isInitModule(file))) {
-    addModuleAliases(aliases, path, false);
-  }
-  for (const path of entries.filter(isInitModule)) {
-    addModuleAliases(aliases, path, true);
-  }
-
-  return aliases;
-}
-
-function addModuleAliases(aliases: Record<string, string>, path: string, isInit: boolean): void {
-  const withoutExtension = path.replace(/\.(?:lua|luau)$/i, "");
-  const candidates = new Set([path, withoutExtension, withoutExtension.replaceAll("/", ".")]);
-
-  if (isInit) {
-    const parent = withoutExtension.replace(/\/init$/i, "");
-    candidates.add(parent);
-    candidates.add(parent.replaceAll("/", "."));
-  }
-
-  for (const candidate of candidates) {
-    if (candidate && !Object.hasOwn(aliases, candidate)) {
-      aliases[candidate] = path;
-    }
-  }
-}
-
-export function isInitModule(path: string): boolean {
-  return /(?:^|\/)init\.(?:lua|luau)$/i.test(path);
-}
 
 export function projectEntries(project: ProjectPayload): Array<[string, string]> {
   return Object.entries(project.files).sort(([a], [b]) => a.localeCompare(b));

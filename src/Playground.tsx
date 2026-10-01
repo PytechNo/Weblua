@@ -40,12 +40,16 @@ import {
   serializeProject,
   tryBuildProjectShareUrl
 } from "./lib/codec";
+import { diagnosticRange, formatDiagnostic } from "./lib/diagnostics";
+import { luauIntelligence } from "./lib/editorIntelligence";
 import {
   defaultExample,
   exampleMatchesProject,
   examples,
   projectForExample
 } from "./lib/examples";
+import { onLuauAnalysisReady, warmLuauAnalysis } from "./lib/luauAnalysis";
+import { readLuauTypeMode, storeLuauTypeMode } from "./lib/preferences";
 import {
   createDefaultWorkspace,
   deleteProjectFile,
@@ -58,6 +62,8 @@ import { runProject, type RunHandle } from "./lib/runner";
 import { reportRuntimeError, trackEvent } from "./lib/telemetry";
 import { DEFAULT_RUN_TIMEOUT_MS, EXTENDED_RUN_TIMEOUT_MS } from "./lib/types";
 import type {
+  Diagnostic,
+  LuauTypeMode,
   OutputChunk,
   ProjectPayload,
   RunResult,
@@ -79,6 +85,12 @@ const runtimeOptions: Array<{ value: RuntimeFlavor; label: string }> = [
   { value: "lua54", label: "Lua 5.4" },
   { value: "lua55", label: "Lua 5.5" },
   { value: "luau", label: "Luau" }
+];
+
+const typeModeOptions: Array<{ value: LuauTypeMode; label: string }> = [
+  { value: "strict", label: "Strict" },
+  { value: "nonstrict", label: "Nonstrict" },
+  { value: "off", label: "Off" }
 ];
 
 const sharedEditorChrome = {
@@ -105,6 +117,42 @@ const sharedEditorChrome = {
     border: "none",
     borderRight: "1px solid var(--border)",
     paddingLeft: "6px"
+  },
+  ".cm-tooltip": {
+    backgroundColor: "var(--surface-2)",
+    color: "var(--text)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: "8px",
+    boxShadow: "var(--shadow-card)",
+    overflow: "hidden"
+  },
+  ".cm-tooltip-autocomplete > ul": {
+    fontFamily: 'var(--font-mono, "SFMono-Regular", Consolas, monospace)',
+    fontSize: "12.5px"
+  },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "var(--primary)",
+    color: "var(--primary-text)"
+  },
+  ".cm-completionDetail": {
+    marginLeft: "1.2em",
+    color: "var(--muted)",
+    fontStyle: "normal"
+  },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail": {
+    color: "inherit",
+    opacity: "0.8"
+  },
+  ".cm-completionInfo, .cm-luau-hover": {
+    padding: "6px 10px",
+    maxWidth: "560px",
+    fontFamily: 'var(--font-mono, "SFMono-Regular", Consolas, monospace)',
+    fontSize: "12.5px",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere"
+  },
+  ".cm-luau-hover code": {
+    fontFamily: "inherit"
   }
 };
 
@@ -182,6 +230,22 @@ function runtimeLabel(flavor: RuntimeFlavor): string {
   return runtimeOptions.find((runtime) => runtime.value === flavor)?.label ?? flavor;
 }
 
+/** The "source" line of a lint tooltip: which checker said so. */
+function diagnosticSourceLabel(diagnostic: Diagnostic, flavor: RuntimeFlavor): string {
+  switch (diagnostic.source) {
+    case "type":
+      return "Luau type check";
+    case "lint":
+      return diagnostic.code ? `Luau lint · ${diagnostic.code}` : "Luau lint";
+    default:
+      return runtimeLabel(flavor);
+  }
+}
+
+function countLabel(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 function defaultProjectName(workspace: Workspace): string {
   const base = workspace.project.entry.split("/").at(-1) ?? "project";
   return base.replace(/\.(?:lua|luau)$/i, "") || "Untitled project";
@@ -207,6 +271,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const [longRuns, setLongRuns] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
+  /** Luau files without a `--!strict`-style hot comment are checked in this mode. */
+  const [typeMode, setTypeMode] = useState<LuauTypeMode>(readLuauTypeMode);
   const [isHydrated, setIsHydrated] = useState(false);
   // Constant for the life of the mount: the answer cannot change once the
   // hash is read and restore() is in flight.
@@ -223,12 +289,18 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const runRef = useRef<RunHandle | null>(null);
   /** Latest workspace for callbacks that must not be rebuilt per keystroke. */
   const workspaceRef = useRef(workspace);
+  const typeModeRef = useRef(typeMode);
 
   // Declared ahead of every other effect so the lint source reads a committed
   // workspace, never one from a render React threw away.
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    typeModeRef.current = typeMode;
+    storeLuauTypeMode(typeMode);
+  }, [typeMode]);
 
   const refreshProjects = useCallback(async () => {
     if (isEmbed) return;
@@ -283,6 +355,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   }, [isEmbed, isHydrated, workspace]);
 
   const activeCode = workspace.project.files[workspace.activeFile] ?? "";
+  /** Hold back content whose size a pending restore would change. */
+  const editorReady = isHydrated || !restorePending;
   const selectedExample = useMemo(() => {
     const example = examples.find((candidate) => exampleMatchesProject(candidate, workspace.project));
     return example?.id ?? "custom";
@@ -357,7 +431,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     setNotice(null);
 
     try {
-      const checked = await checkProject(workspace.project, workspace.activeFile);
+      const isLuau = workspace.project.flavor === "luau";
+      const checked = await checkProject(workspace.project, workspace.activeFile, { typeMode });
       if (!checked) {
         setNotice("Check could not run. Try again.");
         return;
@@ -365,26 +440,48 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
 
       trackEvent("check", {
         flavor: workspace.project.flavor,
-        problems: checked.diagnostics.length
+        problems: checked.diagnostics.length,
+        ...(isLuau ? { types: typeMode } : {})
       });
 
-      const clean = checked.diagnostics.length === 0;
+      const errors = checked.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
+      const warnings = checked.diagnostics.length - errors;
+      const chunks: OutputChunk[] = checked.diagnostics.map((diagnostic) => ({
+        kind: "stderr",
+        text: formatDiagnostic(diagnostic, workspace.activeFile)
+      }));
+
+      if (chunks.length === 0) {
+        chunks.push({
+          kind: "system",
+          text: checked.typeChecked
+            ? "Check passed: every project file compiled and type-checked cleanly."
+            : "Check passed: every project file compiled cleanly."
+        });
+      } else {
+        chunks.push({
+          kind: "system",
+          text: `${countLabel(errors, "error")}, ${countLabel(warnings, "warning")}.`
+        });
+      }
+      if (isLuau && typeMode !== "off" && !checked.typeChecked) {
+        chunks.push({
+          kind: "system",
+          text: "The Luau type checker could not load, so only syntax was checked."
+        });
+      }
+
       setResult({
         id: checked.id,
         flavor: checked.flavor,
-        status: clean ? "ok" : "error",
+        status: errors > 0 ? "error" : "ok",
         durationMs: checked.durationMs,
-        chunks: clean
-          ? [{ kind: "system", text: "Check passed: every project file compiled cleanly." }]
-          : checked.diagnostics.map((diagnostic) => ({
-              kind: "stderr" as const,
-              text: `${diagnostic.file ?? workspace.activeFile}:${diagnostic.line}: ${diagnostic.message}`
-            }))
+        chunks
       });
     } finally {
       setIsChecking(false);
     }
-  }, [workspace]);
+  }, [typeMode, workspace]);
 
   /**
    * Formats the open file with StyLua, loaded on first use. The result is
@@ -461,48 +558,67 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
         if (!source.trim()) return [];
 
         const { project, activeFile } = workspaceRef.current;
+        // Only the open file is type-checked per keystroke, and a cold
+        // analyzer is skipped rather than awaited; it forces a fresh pass
+        // when it finishes loading.
         const checked = await checkProject(
           { ...project, files: { ...project.files, [activeFile]: source } },
-          activeFile
+          activeFile,
+          { typeMode: typeModeRef.current, typeCheckFile: activeFile, background: true }
         );
         if (!checked || view.state.doc.toString() !== source) return [];
 
         return checked.diagnostics
           .filter((diagnostic) => !diagnostic.file || diagnostic.file === activeFile)
-          .map((diagnostic) => {
-            const lineNumber = Math.min(Math.max(diagnostic.line, 1), view.state.doc.lines);
-            const line = view.state.doc.line(lineNumber);
-            return {
-              from: line.from,
-              to: line.to,
-              severity: diagnostic.severity,
-              message: diagnostic.message,
-              source: runtimeLabel(project.flavor)
-            };
-          });
+          .map((diagnostic) => ({
+            ...diagnosticRange(view.state.doc, diagnostic),
+            severity: diagnostic.severity,
+            message: diagnostic.message,
+            source: diagnosticSourceLabel(diagnostic, project.flavor)
+          }));
       },
       { delay: 650 }
     );
 
     // Completion, hover, and builtin highlighting read the project through the
-    // same ref, for the same reason.
-    const language = luaSupport({
-      flavor: () => workspaceRef.current.project.flavor,
-      activeFile: () => workspaceRef.current.activeFile,
-      files: () => Object.keys(workspaceRef.current.project.files)
-    });
+    // same ref, for the same reason. For Luau, the analyzer adds types to the
+    // first two.
+    const language = luaSupport(
+      {
+        flavor: () => workspaceRef.current.project.flavor,
+        activeFile: () => workspaceRef.current.activeFile,
+        files: () => Object.keys(workspaceRef.current.project.files)
+      },
+      luauIntelligence(() => ({ ...workspaceRef.current, typeMode: typeModeRef.current }))
+    );
 
     return [language, liveLinter, lintGutter()];
   }, []);
 
   // A stable lint source no longer re-runs just because the extension array
-  // was rebuilt, so ask for a pass when the runtime or the open file changes.
+  // was rebuilt, so ask for a pass when the runtime, the open file, or the
+  // type-checking mode changes.
   useEffect(() => {
     const view = editorRef.current?.view;
     if (!view) return;
     forceLinting(view);
     view.dispatch({ effects: refreshLuaContext.of(null) });
-  }, [workspace.activeFile, workspace.project.flavor]);
+  }, [typeMode, workspace.activeFile, workspace.project.flavor]);
+
+  // Load the Luau analyzer once a Luau project is on screen, so the first
+  // keystroke is not the one that pays for downloading it. Every load, and
+  // every reload after a crash, refreshes the diagnostics it missed.
+  const wantsAnalysis = workspace.project.flavor === "luau" && typeMode !== "off";
+  useEffect(() => {
+    if (!wantsAnalysis || !editorReady) return;
+
+    const unsubscribe = onLuauAnalysisReady(() => {
+      const view = editorRef.current?.view;
+      if (view) forceLinting(view);
+    });
+    void warmLuauAnalysis();
+    return unsubscribe;
+  }, [editorReady, wantsAnalysis]);
 
   const loadExample = (id: string) => {
     const example = examples.find((item) => item.id === id);
@@ -758,8 +874,6 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const statusKind = isRunning ? "running" : result ? result.status : "idle";
   const filePaths = Object.keys(workspace.project.files);
   const activeNamedProject = projects.find((project) => project.id === workspace.activeProjectId);
-  /** Hold back content whose size a pending restore would change. */
-  const editorReady = isHydrated || !restorePending;
 
   return (
     <div className={isEmbed ? "app app-embed" : "app"}>
@@ -927,6 +1041,21 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
               <span className="window-dots" aria-hidden="true"><i /><i /><i /></span>
               <span className="pane-title">{workspace.activeFile}</span>
               <span className="pane-badge">{runtimeLabel(workspace.project.flavor)}</span>
+              {workspace.project.flavor === "luau" && (
+                <label
+                  className="type-mode"
+                  title="Type checking for files without a --!strict, --!nonstrict, or --!nocheck comment"
+                >
+                  <span>Types</span>
+                  <select value={typeMode} onChange={(event) => setTypeMode(event.target.value as LuauTypeMode)}>
+                    {typeModeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button className="icon-button text-icon" type="button" onClick={() => void formatActiveFile()} disabled={isFormatting || !editorReady} title="Format file (Shift+Alt+F)" aria-label="Format file">
                 <WandSparkles size={16} />
               </button>

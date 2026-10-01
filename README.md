@@ -6,8 +6,9 @@ Worker through WebAssembly; there is no account system, code-execution backend,
 or project database.
 
 Weblua is a language playground, not a Roblox emulator. Its Luau runtime accepts
-Luau language syntax, including annotations and generics, but does not provide
-Roblox services, instances, globals, Studio tooling, or static type analysis.
+Luau language syntax, including annotations and generics, and its editor runs
+Luau's type checker, but it does not provide Roblox services, instances, globals,
+or Studio tooling.
 
 ## What the playground includes
 
@@ -20,7 +21,10 @@ Roblox services, instances, globals, Studio tooling, or static type analysis.
 - `require("lib.module")`, `require("lib/module")`, and `init.lua` module aliases.
   Luau also resolves `./`, `../`, and `@self` paths relative to the requiring module.
 - Luau's `task` library (`spawn`, `defer`, `delay`, `wait`, `cancel`) with real-time waits.
-- A compile-only **Check** action with per-file syntax diagnostics.
+- A **Check** action that compiles every file without running it and reports
+  per-file syntax diagnostics (and, for Luau, type errors and lints).
+- Luau type checking and linting as you type, in strict or nonstrict mode, with
+  autocomplete and hover types.
 - Preset stdin through `io.read()` in Lua and `read()` in Luau.
 - Live stdout and stderr, with status and elapsed time after each run finishes.
 - Source-only share links and lazy-loading iframe embeds.
@@ -56,8 +60,34 @@ in-VM `task` scheduler, so top-level code can `task.wait`; the run ends when no 
 left waiting. An error in the main thread fails the run, while an error in any other
 task is printed to stderr and the remaining tasks keep running.
 
-The **Check** action only compiles every source file. For Luau, this verifies syntax;
-it does not invoke the Luau Analysis library or report static type errors.
+The **Check** action compiles every source file without running it. For Luau
+projects it also type-checks and lints them; see below.
+
+## Luau type checking
+
+Luau projects are checked by Luau's own analyzer, compiled to WebAssembly by
+[`@luau-rs/luau`](https://www.npmjs.com/package/@luau-rs/luau). It runs in a
+separate worker that only loads for Luau projects (about 1.7 MB gzipped, fetched
+once and then cached), so Lua 5.x projects never download it.
+
+- The editor underlines type errors and lint warnings in the open file as you
+  type. **Check** reports them for every project file.
+- The **Types** menu in the editor header sets the default mode: **Strict**,
+  **Nonstrict**, or **Off**. A `--!strict`, `--!nonstrict`, or `--!nocheck` comment
+  at the top of a file overrides it, and `--!nolint` silences lints. The choice is
+  remembered per browser.
+- `require` resolves the same names the runtime accepts, including
+  `require("lib.util")` and `./`, `../`, and `@self` paths, so types flow between
+  project files.
+- Completion gains checked types, plus the fields and methods of values from other
+  files. Hovering any name shows its type; stdlib names keep their documentation
+  under it. Until the analyzer has loaded, both work from the syntax tree alone.
+- Weblua's `read()` and `task` globals are declared to the checker. Roblox globals
+  are not.
+
+The analyzer and the runtime are built from different Luau releases, so a newer
+syntax feature can pass one and not the other. The runtime's compile check always
+runs as well, and its verdict on syntax is the one that matters for **Run**.
 
 Output is streamed from the worker as it is produced. The page batches display
 updates and keeps received output when a run is stopped or times out. Completed
@@ -95,8 +125,9 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
 - Stop ends a run immediately, from the toolbar or with Esc.
 - Lua 5.4 has a 32 MiB runtime memory cap.
 - URL sharing has a 32 KiB encoded-payload cap.
-- The Luau runtime does not include Roblox APIs or a static type checker. Its `task`
-  library is a language-level scheduler, not Roblox's engine loop.
+- The Luau runtime does not include Roblox APIs, and the type checker does not know
+  Roblox types. Its `task` library is a language-level scheduler, not Roblox's engine
+  loop.
 - `task.wait` uses real time with a one-frame (1/60 s) minimum, as on Roblox, so waits
   count toward the run's time limit.
 - Formatting loads StyLua's WebAssembly build (about 0.9 MB compressed) on first use.
@@ -146,7 +177,8 @@ npm run dev
 ```
 
 Open the local Vite URL. Press Ctrl/Cmd-Enter to run, Ctrl/Cmd-Shift-Enter to
-compile-check every file, or Shift+Alt+F to format the open file.
+compile-check every file (and type-check it, for Luau), or Shift+Alt+F to format the
+open file.
 
 The editor grammar lives in [`src/lang/lua/lua.grammar`](src/lang/lua/lua.grammar) and
 is compiled by `@lezer/generator`'s Vite plugin during dev, build, and tests. The
@@ -162,7 +194,7 @@ until the catalog is updated.
   entry pages, and prerenders the landing page.
 - `npm run preview` serves the production build locally.
 - `npm test` runs the project, codec, persistence, routing, telemetry, editor language,
-  stdlib catalog, formatter, and Luau regression tests.
+  stdlib catalog, formatter, Luau regression, and Luau analysis tests.
 
 ## Docker and self-hosting
 

@@ -111,7 +111,7 @@ One per-version data source feeds completion and hover. Versions differ:
 
 ---
 
-### 6. Static type analysis — spike first
+### 6. Static type analysis
 `luau-web` ships only the compiler and VM, so this means owning an Emscripten
 build of `Luau.Analysis` and tracking upstream releases.
 
@@ -130,12 +130,22 @@ build of `Luau.Analysis` and tracking upstream releases.
   strict file 11 ms. It reported real type errors ("Expected this to be 'number',
   but got 'string'"). For scale: the whole Playground chunk is 179 KB gzip, and
   the lazily loaded StyLua is 899 KB gzip.
-- [ ] **Decide** from the numbers. Speed is not a concern; the cost is a ~0.7 MB
-  download on first Check of a Luau project, plus owning the Emscripten build and
-  following upstream releases. If it ships: lazy-load it, run it from Check,
-  surface diagnostics in the lint gutter, honor `--!strict` / `--!nonstrict` /
-  `--!nocheck`, and update the positioning copy that currently says Check does not
-  type-check.
+- [x] **Shipped** on the `@luau-rs/luau` npm package's analysis build rather than an
+  owned Emscripten build (`src/workers/luauAnalysisSession.ts`):
+  - Lazy-loaded in its own worker, for Luau projects only, once the editor is up.
+  - Live diagnostics for the open file in the lint gutter, with column ranges, and
+    Check runs it on every file. Lints are warnings, named by lint code.
+  - Honors `--!strict` / `--!nonstrict` / `--!nocheck`; the editor header's Types
+    menu (Strict / Nonstrict / Off) sets the default.
+  - `require` resolves as the runtime does: dotted names, `./`, `../`, `@self`.
+  - Declares the Weblua globals `read` and `task`; a test type-checks every built-in
+    Luau example.
+  - Adds checked types to completion and hover, layered on the stdlib catalog.
+  - Positioning copy updated.
+- [ ] **Download size**: the package build is 1.7 MB gzip against the spike's 713 KB
+  `-Oz` build. Switching to an owned `-Oz` build would save ~1 MB on the first Luau
+  load, at the cost of owning the build. The package's require hooks are internal
+  API, which is also why it is pinned to an exact version.
 
 ---
 

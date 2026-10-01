@@ -1,6 +1,9 @@
+import { mergeDiagnostics } from "./diagnostics";
+import { analyzeLuauProject } from "./luauAnalysis";
 import {
   isRunProgress,
   type CheckResult,
+  type LuauTypeMode,
   type ProjectPayload,
   type RunRequest,
   type RuntimeFlavor,
@@ -8,6 +11,19 @@ import {
 } from "./types";
 
 const CHECK_TIMEOUT_MS = 4000;
+
+export interface ProjectCheckOptions {
+  /** Luau only. Absent or "off" checks syntax alone. */
+  typeMode?: LuauTypeMode;
+  /** Type-check just this file rather than every project file. */
+  typeCheckFile?: string;
+  /**
+   * Leave types out instead of waiting while the analyzer is still loading.
+   * The live linter sets this; it re-runs once the analyzer is ready.
+   */
+  background?: boolean;
+  timeoutMs?: number;
+}
 
 // Unlike runs, checks reuse one long-lived worker so the wasm runtimes stay
 // warm between keystrokes. The worker is replaced if it errors or hangs.
@@ -75,21 +91,41 @@ export function checkSnippet(
  * travels with the request so consumers can associate returned file-aware
  * diagnostics with the currently visible editor while still showing a full
  * result for an explicit Check action.
+ *
+ * Luau projects are also type-checked and linted unless `typeMode` is off.
+ * The compile pass still runs: it is the runtime that will execute the code,
+ * so its verdict on syntax is the one that counts.
  */
-export function checkProject(
+export async function checkProject(
   project: ProjectPayload,
   activeFile?: string,
-  timeoutMs = CHECK_TIMEOUT_MS
+  options: ProjectCheckOptions = {}
 ): Promise<CheckResult | null> {
-  return checkRequest(
+  const compiled = checkRequest(
     {
       id: crypto.randomUUID(),
       project,
       activeFile,
       mode: "check"
     },
-    timeoutMs
+    options.timeoutMs ?? CHECK_TIMEOUT_MS
   );
+
+  const { typeMode } = options;
+  if (project.flavor !== "luau" || !typeMode || typeMode === "off") {
+    return compiled;
+  }
+
+  const files = options.typeCheckFile ? [options.typeCheckFile] : Object.keys(project.files);
+  const [compileResult, analysis] = await Promise.all([
+    compiled,
+    analyzeLuauProject(project, typeMode, files, { skipCold: options.background })
+  ]);
+  if (!compileResult) return null;
+
+  return analysis
+    ? { ...compileResult, diagnostics: mergeDiagnostics(compileResult.diagnostics, analysis), typeChecked: true }
+    : { ...compileResult, typeChecked: false };
 }
 
 function checkRequest(request: RunRequest, timeoutMs: number): Promise<CheckResult | null> {

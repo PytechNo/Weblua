@@ -93,6 +93,17 @@ export interface Diagnostic {
   file?: string;
   /** Compatibility alias for consumers that historically used this name. */
   filename?: string;
+  /**
+   * 1-based UTF-16 column range, when the reporter knows one. Compile errors
+   * from the runtimes only name a line; the Luau analyzer names a span.
+   */
+  column?: number;
+  endLine?: number;
+  endColumn?: number;
+  /** What produced it. Absent means the runtime's own compiler. */
+  source?: "compile" | "type" | "lint";
+  /** Analyzer error code or lint name, e.g. "1000" or "LocalUnused". */
+  code?: string;
 }
 
 export interface CheckResult {
@@ -100,6 +111,11 @@ export interface CheckResult {
   flavor: RuntimeFlavor;
   durationMs: number;
   diagnostics: Diagnostic[];
+  /**
+   * Whether the Luau analyzer contributed. False when it was off, still
+   * loading, or failed, so the diagnostics are compile errors only.
+   */
+  typeChecked?: boolean;
 }
 
 export interface RunResult {
@@ -109,6 +125,75 @@ export interface RunResult {
   durationMs: number;
   chunks: OutputChunk[];
 }
+
+/**
+ * Default Luau type-checking mode for files without a `--!strict`,
+ * `--!nonstrict`, or `--!nocheck` hot comment. "off" skips the analyzer
+ * entirely, leaving compile errors only.
+ */
+export type LuauTypeMode = "strict" | "nonstrict" | "off";
+
+/** Zero-based line and UTF-16 column, the analyzer's own convention. */
+export interface SourcePosition {
+  line: number;
+  column: number;
+}
+
+export type LuauCompletionKind =
+  | "property"
+  | "binding"
+  | "keyword"
+  | "string"
+  | "type"
+  | "module"
+  | "generatedFunction"
+  | "requirePath"
+  | "hotComment";
+
+export interface LuauCompletionEntry {
+  label: string;
+  kind: LuauCompletionKind;
+  /** Rendered type, when the entry has one. */
+  type?: string;
+  insertText?: string;
+  /** Whether accepting it should add a call: "cursorInside" for `f(|)`. */
+  parentheses: "none" | "cursorAfter" | "cursorInside";
+  deprecated: boolean;
+  /** Matches the type expected at the cursor. */
+  typeMatch: boolean;
+  /** Reached with `.` but meant for `:` (or the reverse). */
+  wrongIndexType: boolean;
+  /** A method typed after `.` that should be called with `:`. */
+  replaceDotWithColon: boolean;
+}
+
+export interface LuauInspection {
+  name?: string;
+  type: string;
+}
+
+interface AnalysisRequestBase {
+  id: string;
+  project: ProjectPayload;
+  mode: Exclude<LuauTypeMode, "off">;
+}
+
+export type AnalysisRequest =
+  | { id: string; type: "init" }
+  | (AnalysisRequestBase & { type: "check"; files: string[] })
+  | (AnalysisRequestBase & { type: "complete"; file: string; position: SourcePosition })
+  | (AnalysisRequestBase & { type: "inspect"; file: string; position: SourcePosition });
+
+export interface AnalysisResults {
+  init: true;
+  check: Diagnostic[];
+  complete: LuauCompletionEntry[];
+  inspect: LuauInspection | null;
+}
+
+export type AnalysisResponse =
+  | { id: string; ok: true; result: AnalysisResults[keyof AnalysisResults] }
+  | { id: string; ok: false; error: string };
 
 export interface ExampleSnippet extends SnippetPayload {
   id: string;
