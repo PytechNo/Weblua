@@ -198,6 +198,74 @@ end
 print(first({ "one", "two" }))`
   },
   {
+    id: "luau-typed-modules",
+    title: "Luau typed modules",
+    project: assertProjectPayload({
+      flavor: "luau",
+      entry: "main.luau",
+      files: {
+        "main.luau": `--!strict
+-- Types cross files: hover \`potion\` or \`bag\`, or type \`inventory.\` to see them.
+local inventory = require("./lib/inventory")
+
+-- An exported type is reached through the module's local name.
+type Item = inventory.Item
+
+local bag = inventory.new()
+inventory.add(bag, "potion", 3)
+inventory.add(bag, "arrow", 12)
+local potion: Item = inventory.add(bag, "potion", 2)
+
+print(\`{potion.name} now: {potion.count}\`)
+for _, item in inventory.sorted(bag) do
+  print(item.name, item.count)
+end
+
+-- Uncomment the next line: the checker flags "ten", because count is a number.
+-- inventory.add(bag, "bolt", "ten")`,
+        "lib/inventory.luau": `-- A module can export types along with its functions.
+export type Item = {
+  name: string,
+  count: number,
+}
+
+export type Inventory = {
+  items: { [string]: Item },
+}
+
+local inventory = {}
+
+function inventory.new(): Inventory
+  return { items = {} }
+end
+
+function inventory.add(bag: Inventory, name: string, count: number): Item
+  local item = bag.items[name]
+  if item then
+    item.count += count
+  else
+    item = { name = name, count = count }
+    bag.items[name] = item
+  end
+  return item
+end
+
+function inventory.sorted(bag: Inventory): { Item }
+  local list: { Item } = {}
+  for _, item in bag.items do
+    table.insert(list, item)
+  end
+  table.sort(list, function(a: Item, b: Item): boolean
+    return a.name < b.name
+  end)
+  return list
+end
+
+return inventory`
+      }
+    })
+  },
+  {
     id: "luau-tasks",
     title: "Luau tasks and modules",
     project: assertProjectPayload({

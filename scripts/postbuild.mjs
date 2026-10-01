@@ -85,7 +85,7 @@ const routes = [
     dir: "playground",
     title: "Online Luau &amp; Lua Editor — Weblua Playground",
     description:
-      "Write, run, and share multi-file Luau and Lua 5.1–5.5 projects in your browser. Switch runtimes instantly; no account or install needed.",
+      "Write, run, type-check, and share multi-file Luau and Lua 5.1–5.5 projects in your browser. Switch runtimes instantly; no account or install needed.",
     canonical: "https://weblua.com/playground",
     noindex: false
   },

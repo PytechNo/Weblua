@@ -48,6 +48,7 @@ import {
   examples,
   projectForExample
 } from "./lib/examples";
+import { gistHash, gistIdFrom, loadGistProject, readGistHash } from "./lib/gist";
 import { onLuauAnalysisReady, warmLuauAnalysis } from "./lib/luauAnalysis";
 import { readLuauTypeMode, storeLuauTypeMode } from "./lib/preferences";
 import {
@@ -310,12 +311,24 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   useEffect(() => {
     let cancelled = false;
 
+    /** A gist that fails to load leaves a notice, then the draft opens as usual. */
+    const readGist = async (id: string): Promise<ProjectPayload | null> => {
+      try {
+        return await loadGistProject(id);
+      } catch (error) {
+        if (!cancelled) setNotice(`Could not open the gist. ${error instanceof Error ? error.message : ""}`.trim());
+        return null;
+      }
+    };
+
     const restore = async () => {
       try {
-        const shared = await readProjectShareHash(window.location.hash);
-        const [draft, savedProjects] = isEmbed
-          ? [null, [] as StoredWorkspaceProject[]]
-          : await Promise.all([workspaceStore.getDraft(), workspaceStore.listProjects()]);
+        const gistId = readGistHash(window.location.hash);
+        const [shared, draft, savedProjects] = await Promise.all([
+          gistId ? readGist(gistId) : readProjectShareHash(window.location.hash),
+          isEmbed ? null : workspaceStore.getDraft(),
+          isEmbed ? ([] as StoredWorkspaceProject[]) : workspaceStore.listProjects()
+        ]);
 
         if (cancelled) return;
         if (shared) {
@@ -708,7 +721,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
       return;
     }
     if (!shareUrl) {
-      setNotice(`This project is too large for a reliable link. Export ${PROJECT_EXPORT_EXTENSION} instead.`);
+      setNotice(
+        `This project is too large for a link. Export it, add the ${PROJECT_EXPORT_EXTENSION} file to a GitHub gist, then open the gist from Projects for a short link.`
+      );
       return;
     }
 
@@ -746,7 +761,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
       return;
     }
     if (!embedUrl) {
-      setNotice(`This project is too large for an embed link. Export ${PROJECT_EXPORT_EXTENSION} instead.`);
+      setNotice(
+        `This project is too large for an embed link. Export it, add the ${PROJECT_EXPORT_EXTENSION} file to a GitHub gist, and embed /embed#gist= followed by the gist's ID.`
+      );
       return;
     }
 
@@ -787,6 +804,29 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     setWorkspace(saved.workspace);
     await refreshProjects();
     setNotice(`Saved ${saved.name}. Changes now update it automatically.`);
+  };
+
+  const openGist = async () => {
+    const input = window.prompt("GitHub gist URL or ID");
+    if (!input?.trim()) return;
+    const id = gistIdFrom(input);
+    if (!id) {
+      setNotice("That is not a GitHub gist URL or ID.");
+      return;
+    }
+
+    setNotice("Loading the gist from GitHub…");
+    try {
+      const project = await loadGistProject(id);
+      setWorkspace(workspaceFromProject(project));
+      setResult(null);
+      setLibraryOpen(false);
+      window.history.replaceState(null, "", gistHash(id));
+      setNotice("Opened the gist. This page's address now links to it.");
+      trackEvent("open_gist", { flavor: project.flavor });
+    } catch (error) {
+      setNotice(`Could not open the gist. ${error instanceof Error ? error.message : ""}`.trim());
+    }
   };
 
   const openProject = (project: StoredWorkspaceProject) => {
@@ -1025,6 +1065,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
               activeProjectId={workspace.activeProjectId}
               onClose={() => setLibraryOpen(false)}
               onNew={newProject}
+              onOpenGist={() => void openGist()}
               onOpen={openProject}
               onRename={() => void renameCurrentProject()}
               onDelete={() => void deleteCurrentProject()}
@@ -1147,12 +1188,13 @@ interface ProjectLibraryProps {
   activeName?: string;
   onClose: () => void;
   onNew: () => void;
+  onOpenGist: () => void;
   onOpen: (project: StoredWorkspaceProject) => void;
   onRename: () => void;
   onDelete: () => void;
 }
 
-function ProjectLibrary({ projects, activeProjectId, activeName, onClose, onNew, onOpen, onRename, onDelete }: ProjectLibraryProps) {
+function ProjectLibrary({ projects, activeProjectId, activeName, onClose, onNew, onOpenGist, onOpen, onRename, onDelete }: ProjectLibraryProps) {
   return (
     <section className="project-library" id="project-library" role="dialog" aria-label="Local projects">
       <div className="project-library-header">
@@ -1161,6 +1203,7 @@ function ProjectLibrary({ projects, activeProjectId, activeName, onClose, onNew,
       </div>
       <div className="project-library-actions">
         <button className="button" type="button" onClick={onNew}><Plus size={16} /> New project</button>
+        <button className="button" type="button" onClick={onOpenGist} title="Open a GitHub gist of Lua or Luau files, or of a .weblua.json export"><GitHubMark size={15} /> Open gist</button>
         {activeProjectId && <><button className="button" type="button" onClick={onRename}><Pencil size={16} /> Rename</button><button className="button button-danger" type="button" onClick={onDelete}><Trash2 size={16} /> Delete</button></>}
       </div>
       {activeName && <p className="active-project-note">Editing <strong>{activeName}</strong>; changes save automatically.</p>}

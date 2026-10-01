@@ -10,6 +10,7 @@ import {
   Link,
   Lock,
   Menu,
+  Minus,
   Moon,
   Play,
   Share2,
@@ -192,7 +193,7 @@ const FEATURES = [
   {
     icon: Link,
     title: "Share with a link",
-    body: "Source files, the entry point, and the runtime compress into a URL fragment up to 32 KiB. Input, output, and browser-local project metadata stay out of the link."
+    body: "Source files, the entry point, and the runtime compress into a URL fragment up to 32 KiB, or share a GitHub gist for a short link to any size of project. Input, output, and browser-local project metadata stay out of the link."
   },
   {
     icon: Code2,
@@ -214,7 +215,7 @@ const FEATURES = [
 const STEPS = [
   {
     title: "Write",
-    body: "Open the playground and start typing, or load one of fourteen examples—including a multi-file capability tour with modules and preset input."
+    body: "Open the playground and start typing, or load one of fifteen examples—including a multi-file capability tour with modules and preset input, and a Luau project whose modules export types."
   },
   {
     title: "Run",
@@ -240,18 +241,32 @@ const BOUNDARIES = [
   {
     title: "Purposefully bounded runs",
     body:
-      "Runs stop after five seconds, or thirty with long runs on, and whatever printed first is kept. Lua 5.4 also has a 32 MiB runtime memory cap, and URL sharing has a 32 KiB encoded limit; larger projects can be exported instead."
+      "Runs stop after five seconds, or thirty with long runs on, and whatever printed first is kept. Lua 5.4 also has a 32 MiB runtime memory cap, and URL sharing has a 32 KiB encoded limit; larger projects can be shared as a GitHub gist."
   }
 ] as const;
+
+const COMPARED_TOOLS = ["Weblua", "Luau playground", "Roblox Studio"] as const;
+
+/** Checked against play.luau.org and its README in October 2026; keep the note's date in step. */
+const COMPARISON: Array<{ feature: string; support: readonly [boolean, boolean, boolean] }> = [
+  { feature: "Runs in a browser tab, no account", support: [true, true, false] },
+  { feature: "Lua 5.1, 5.2, 5.3, 5.4, and 5.5", support: [true, false, false] },
+  { feature: "Luau type checking, completion, and hover", support: [true, true, true] },
+  { feature: "Multi-file projects", support: [true, true, true] },
+  { feature: "Luau's task library", support: [true, false, true] },
+  { feature: "Share links and iframe embeds", support: [true, true, false] },
+  { feature: "Bytecode view", support: [false, true, false] },
+  { feature: "Roblox APIs and instances", support: [false, false, true] }
+];
 
 const FAQS = [
   {
     q: "Is Weblua really free?",
-    a: "Yes. The hosted playground has no account or server-side run quota, and the source is MIT licensed. Individual runs stop after five seconds, or thirty with long runs on, and source links have a 32 KiB encoded-size limit."
+    a: "Yes. The hosted playground has no account or server-side run quota, and the source is MIT licensed. Individual runs stop after five seconds, or thirty with long runs on, and source links have a 32 KiB encoded-size limit; larger projects can be shared as a GitHub gist."
   },
   {
     q: "Does my code get sent to an execution server?",
-    a: "Normal execution does not upload project source to an execution backend. Sharing compresses source into the URL fragment, which is not part of the HTTP request. A deployment owner may optionally enable Plausible usage events and sanitized Sentry error reports; project source is not intentionally included."
+    a: "Normal execution does not upload project source to an execution backend. Sharing compresses source into the URL fragment, which is not part of the HTTP request. Opening a #gist= link downloads that gist from GitHub's API. A deployment owner may optionally enable Plausible usage events and sanitized Sentry error reports; project source is not intentionally included."
   },
   {
     q: "Which Lua versions does Weblua support?",
@@ -358,6 +373,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
 
           <nav className="nav-links" aria-label="Primary">
             <a href="#features">Features</a>
+            <a href="#compare">Compare</a>
             <a href="#how">How it works</a>
             <a href="#access">Access</a>
             <a href="#faq">FAQ</a>
@@ -402,6 +418,9 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <a href="#features" onClick={closeMenu}>
               Features
             </a>
+            <a href="#compare" onClick={closeMenu}>
+              Compare
+            </a>
             <a href="#how" onClick={closeMenu}>
               How it works
             </a>
@@ -433,14 +452,15 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <div className="hero-copy">
               <span className="badge reveal">
                 <Sparkles size={13} />
-                Now running Lua 5.1–5.5 <em>and</em> Luau
+                New: Luau type checking <em>as you type</em>
               </span>
               <h1 id="hero-title" className="reveal" style={{ transitionDelay: "60ms" }}>
                 The Lua &amp; Luau playground that lives in <span className="grad-text">your browser</span>
               </h1>
               <p className="hero-sub reveal" style={{ transitionDelay: "120ms" }}>
-                Write, run, and share multi-file Lua and Luau projects directly in your browser.
-                No local toolchain, execution backend, or account is required.
+                Write, run, and share multi-file Lua 5.1–5.5 and Luau projects directly in your
+                browser, with Luau type checking as you type. No local toolchain, execution backend,
+                or account is required.
               </p>
               <div className="hero-ctas reveal" style={{ transitionDelay: "180ms" }}>
                 <a className="btn btn-primary btn-lg" href="/playground">
@@ -534,6 +554,64 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
               </article>
             ))}
           </div>
+        </section>
+
+        {/* ---------- Comparison ---------- */}
+        <section className="section" id="compare" aria-labelledby="compare-title">
+          <div className="section-head reveal">
+            <span className="eyebrow">Compare</span>
+            <h2 id="compare-title">
+              Multi-file, type-checked, every Lua. <span className="grad-text">All client-side.</span>
+            </h2>
+            <p>
+              Weblua runs Lua 5.1 through 5.5 and Luau side by side, checks Luau types as you type,
+              and runs your code on your own machine. Other tools do other jobs better, and the table
+              says where.
+            </p>
+          </div>
+
+          <div className="compare-wrap reveal" style={{ transitionDelay: "80ms" }}>
+            <table className="compare">
+              <caption className="visually-hidden">Weblua compared with the Luau playground and Roblox Studio</caption>
+              <thead>
+                <tr>
+                  <th scope="col">
+                    <span className="visually-hidden">Feature</span>
+                  </th>
+                  {COMPARED_TOOLS.map((tool, index) => (
+                    <th scope="col" className={index === 0 ? "is-weblua" : undefined} key={tool}>
+                      {tool}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARISON.map((row) => (
+                  <tr key={row.feature}>
+                    <th scope="row">{row.feature}</th>
+                    {row.support.map((supported, index) => (
+                      <td className={index === 0 ? "is-weblua" : undefined} key={COMPARED_TOOLS[index]}>
+                        {supported ? (
+                          <Check size={17} className="compare-yes" aria-hidden="true" />
+                        ) : (
+                          <Minus size={17} className="compare-no" aria-hidden="true" />
+                        )}
+                        <span className="visually-hidden">{supported ? "Yes" : "No"}</span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="compare-note reveal">
+            Compared in October 2026. The Luau playground is the official{" "}
+            <a href="https://play.luau.org/" target="_blank" rel="noreferrer">
+              play.luau.org
+            </a>
+            : reach for it to read bytecode or try the older type solver. For anything that touches
+            Roblox APIs, use Roblox Studio.
+          </p>
         </section>
 
         {/* ---------- Product showcase ---------- */}
@@ -854,14 +932,15 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
               <span>Weblua</span>
             </a>
             <p>
-              A fast, client-side Lua and Luau playground. Run multi-file projects, test Luau
-              snippets, and share source straight from the browser.
+              A fast, client-side Lua and Luau playground. Run multi-file projects, type-check
+              Luau, and share source straight from the browser.
             </p>
           </div>
           <nav className="footer-col" aria-label="Product">
             <h4>Product</h4>
             <a href="/playground">Playground</a>
             <a href="#features">Features</a>
+            <a href="#compare">Compare</a>
             <a href="#access">Access</a>
             <a href="#faq">FAQ</a>
           </nav>

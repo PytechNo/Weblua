@@ -205,6 +205,24 @@ describe("LuauAnalysisSession diagnostics", () => {
     }
   });
 
+  it("flags the call the typed modules example invites readers to uncomment", async () => {
+    const example = examples.find((candidate) => candidate.id === "luau-typed-modules");
+    expect(example).toBeDefined();
+    if (!example) return;
+
+    const project = projectForExample(example);
+    const main = project.files["main.luau"];
+    const uncommented = main.replace(`-- inventory.add(bag, "bolt", "ten")`, `inventory.add(bag, "bolt", "ten")`);
+    expect(uncommented).not.toBe(main);
+
+    const session = await createSession();
+    session.sync({ ...project, files: { ...project.files, "main.luau": uncommented } }, "nonstrict");
+    const errors = errorsOnly(session.check(["main.luau"]));
+    expect(errors).toEqual([
+      expect.objectContaining({ line: main.split("\n").length, message: "Expected this to be 'number', but got 'string'" })
+    ]);
+  });
+
   it("reports a require that names no project file", async () => {
     const diagnostics = await check({ "main.luau": `local missing = require("lib.missing")\nprint(missing)\n` });
 

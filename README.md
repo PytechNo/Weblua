@@ -27,11 +27,11 @@ or Studio tooling.
   autocomplete and hover types.
 - Preset stdin through `io.read()` in Lua and `read()` in Luau.
 - Live stdout and stderr, with status and elapsed time after each run finishes.
-- Source-only share links and lazy-loading iframe embeds.
+- Source-only share links, GitHub gist links, and lazy-loading iframe embeds.
 - Recovery drafts and named projects stored in IndexedDB.
 - Source-only `.weblua.json` import and export.
-- Fourteen built-in examples, including a multi-file capability tour and a Luau
-  `task` project.
+- Fifteen built-in examples, including a multi-file capability tour, a Luau `task`
+  project, and a Luau project whose module exports types to the file that requires it.
 
 ## Try the capability tour
 
@@ -110,9 +110,30 @@ They deliberately exclude preset input, output, active editor state, named-proje
 metadata, and IndexedDB records. Older `#c=1...` and `#share=` links still decode as
 one-file projects.
 
-Encoded share payloads are limited to 32 KiB. When a project is too large for a
-reliable URL, export its source as `.weblua.json` instead. Decompressed incoming
-share data is capped at 1 MiB before JSON parsing.
+Encoded share payloads are limited to 32 KiB, which holds roughly 85 KB (about
+2,500 lines) of typical source, typed Luau included. When a project is too large for
+a reliable URL, share it as a gist (below) or export its source as `.weblua.json`.
+Decompressed incoming share data is capped at 1 MiB before JSON parsing.
+
+### Gist links
+
+A gist link is short whatever the project's size, which also suits chats that cap
+message length. Weblua has no backend that could create a gist, so:
+
+1. Export the project and add the `.weblua.json` file to a GitHub gist. Secret gists
+   work.
+2. Share `https://weblua.com/playground#gist=<gist id>`, or `/embed#gist=<gist id>`
+   for an iframe. **Projects → Open gist** accepts a gist URL or ID and puts that
+   link in the address bar.
+
+A gist of plain `.lua` or `.luau` files opens too, as a flat project (gist file names
+cannot contain folders): Luau if any file is `.luau`, otherwise Lua 5.4, with `main`,
+then `init`, as the entry. Use a `.weblua.json` export to keep folders, another Lua
+version, or a different entry.
+
+Opening a gist link downloads the gist from GitHub's API in the visitor's browser,
+so GitHub sees that request; it allows 60 of them an hour from one address. Gist
+sources are capped at 1 MiB, like decompressed share data.
 
 The browser stores the recovery draft and named project library in IndexedDB. If
 IndexedDB is unavailable, the editor falls back to non-persistent in-memory storage.
@@ -124,7 +145,7 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
   stopped or times out still shows everything it printed.
 - Stop ends a run immediately, from the toolbar or with Esc.
 - Lua 5.4 has a 32 MiB runtime memory cap.
-- URL sharing has a 32 KiB encoded-payload cap.
+- URL sharing has a 32 KiB encoded-payload cap; gist links do not.
 - The Luau runtime does not include Roblox APIs, and the type checker does not know
   Roblox types. Its `task` library is a language-level scheduler, not Roblox's engine
   loop.
@@ -147,13 +168,15 @@ Roblox environment.
 ## Privacy and optional telemetry
 
 Normal execution does not upload project source to a code-execution service. Sharing
-places source in a URL fragment only when the user requests a link or embed.
+places source in a URL fragment only when the user requests a link or embed. Opening a
+`#gist=` link, or a gist from **Projects**, downloads that gist from `api.github.com`.
 
 Deployments may optionally enable Plausible usage events and Sentry error reporting.
 The tracked product events contain runtime/status metadata rather than source. Sentry
-is configured without default PII, and Weblua strips URL fragments and redacts `#c=`
-and `#share=` payloads from error events and navigation breadcrumbs before sending.
-Plausible is not loaded on a URL that contains a current or legacy source payload.
+is configured without default PII, and Weblua strips URL fragments and redacts `#c=`,
+`#share=`, and `#gist=` values from error events and navigation breadcrumbs before
+sending. Plausible is not loaded on a URL that contains a current or legacy source
+payload or a gist ID (the only key to a secret gist).
 Leave both environment variables unset to disable these integrations completely.
 
 ## Browser requirements
@@ -193,8 +216,8 @@ until the catalog is updated.
 - `npm run build` type-checks, builds, writes static `/playground` and `/embed`
   entry pages, and prerenders the landing page.
 - `npm run preview` serves the production build locally.
-- `npm test` runs the project, codec, persistence, routing, telemetry, editor language,
-  stdlib catalog, formatter, Luau regression, and Luau analysis tests.
+- `npm test` runs the project, codec, gist, persistence, routing, telemetry, editor
+  language, stdlib catalog, formatter, Luau regression, and Luau analysis tests.
 
 ## Docker and self-hosting
 

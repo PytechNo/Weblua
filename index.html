@@ -3,24 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Free online Luau and Lua playground. Run Luau and Lua 5.1–5.5 in your browser with multiple files, instant version switching, and shareable links. No account, no install." />
-    <meta name="keywords" content="run lua online,lua playground,luau playground,lua compiler online,lua 5.1,lua 5.2,lua 5.3,lua 5.4,lua 5.5,luau" />
+    <meta name="description" content="Free online Luau and Lua playground. Run Luau and Lua 5.1–5.5 in your browser with multiple files, Luau type checking, and shareable links. No account, no install." />
+    <meta name="keywords" content="run lua online,lua playground,luau playground,lua compiler online,luau type checker,luau type checking,luau strict mode,online luau editor,lua 5.1,lua 5.2,lua 5.3,lua 5.4,lua 5.5,luau" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Weblua" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="Luau &amp; Lua Playground — Run Lua 5.1–5.5 Online | Weblua" />
-    <meta property="og:description" content="Run and share multi-file Luau and Lua 5.1–5.5 projects directly in the browser. No account, no install." />
+    <meta property="og:description" content="Run, type-check, and share multi-file Luau and Lua 5.1–5.5 projects directly in the browser. No account, no install." />
     <meta property="og:url" content="https://weblua.com/" />
     <meta property="og:image" content="https://weblua.com/og.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Weblua — a browser playground for Lua 5.1–5.5 and Luau projects." />
+    <meta property="og:image:alt" content="Weblua — a browser playground for Lua 5.1–5.5 and Luau projects, with Luau type checking." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Luau &amp; Lua Playground — Run Lua 5.1–5.5 Online | Weblua" />
-    <meta name="twitter:description" content="A free online playground for multi-file Luau and Lua 5.1–5.5 projects. No account, no install." />
+    <meta name="twitter:description" content="A free online playground for multi-file Luau and Lua 5.1–5.5 projects, with Luau type checking as you type. No account, no install." />
     <meta name="twitter:image" content="https://weblua.com/og.png" />
-    <meta name="twitter:image:alt" content="Weblua — a browser playground for Lua 5.1–5.5 and Luau projects." />
+    <meta name="twitter:image:alt" content="Weblua — a browser playground for Lua 5.1–5.5 and Luau projects, with Luau type checking." />
     <meta name="theme-color" content="#05070f" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
@@ -42,7 +42,16 @@
         "@type": "SoftwareApplication",
         "name": "Weblua",
         "url": "https://weblua.com/",
-        "description": "A free browser playground for running and sharing multi-file Lua 5.1, 5.2, 5.3, 5.4, 5.5, and Luau projects through WebAssembly.",
+        "description": "A free browser playground for running, type-checking, and sharing multi-file Lua 5.1, 5.2, 5.3, 5.4, 5.5, and Luau projects through WebAssembly.",
+        "featureList": [
+          "Lua 5.1, 5.2, 5.3, 5.4, and 5.5 runtimes",
+          "Luau runtime with the task library",
+          "Luau type checking and linting as you type, in strict or nonstrict mode",
+          "Type-aware completion and hover types",
+          "Multi-file projects with require",
+          "StyLua formatting",
+          "Share links, GitHub gist links, and iframe embeds"
+        ],
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Any (web browser)",
         "browserRequirements": "Requires JavaScript and WebAssembly",
@@ -64,7 +73,7 @@
             "name": "Is Weblua really free?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. The hosted playground has no account or server-side run quota, and the source is MIT licensed. Individual runs stop after five seconds, or thirty with long runs on, and source links have a 32 KiB encoded-size limit."
+              "text": "Yes. The hosted playground has no account or server-side run quota, and the source is MIT licensed. Individual runs stop after five seconds, or thirty with long runs on, and source links have a 32 KiB encoded-size limit; larger projects can be shared as a GitHub gist."
             }
           },
           {
@@ -72,7 +81,7 @@
             "name": "Does my code get sent to an execution server?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Normal execution does not upload project source to an execution backend. Sharing stores source in the URL fragment. Deployments may optionally enable anonymous usage events and sanitized error reports that intentionally exclude project source."
+              "text": "Normal execution does not upload project source to an execution backend. Sharing stores source in the URL fragment, and opening a #gist= link downloads that gist from GitHub's API. Deployments may optionally enable anonymous usage events and sanitized error reports that intentionally exclude project source."
             }
           },
           {
@@ -88,7 +97,7 @@
             "name": "Does Weblua type-check Luau?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Yes. Luau's own type checker underlines errors as you type, and Check reports type errors and lints for every file, in strict or nonstrict mode. It knows the Luau standard library, not Roblox APIs."
+              "text": "Yes. Luau's own type checker underlines errors as you type, and the Check action reports type errors and lints for every file. Strict mode is the default, and --!strict, --!nonstrict, and --!nocheck comments work per file. It knows the Luau standard library, not Roblox APIs. Lua 5.x projects get syntax diagnostics only."
             }
           },
           {

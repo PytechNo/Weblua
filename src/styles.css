@@ -1106,6 +1106,81 @@ body[data-theme="light"] .orb {
   line-height: 1.7;
 }
 
+/* Comparison */
+.compare-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--glass), transparent 65%), var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14.5px;
+}
+
+.compare th,
+.compare td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  vertical-align: middle;
+}
+
+.compare tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.compare thead th {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.compare thead th + th {
+  width: 19%;
+}
+
+.compare tbody th {
+  color: var(--muted);
+  font-weight: 500;
+  text-align: left;
+}
+
+.compare .is-weblua {
+  background: var(--glass-strong);
+}
+
+.compare thead .is-weblua {
+  color: var(--primary-soft);
+}
+
+.compare svg {
+  display: block;
+  margin: 0 auto;
+}
+
+.compare-yes {
+  color: var(--success);
+}
+
+.compare-no {
+  color: var(--muted-2);
+}
+
+.compare-note {
+  max-width: 760px;
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.compare-note a {
+  color: var(--primary-soft);
+}
+
 /* Access options */
 .pricing-grid {
   display: grid;
@@ -2479,6 +2554,24 @@ body[data-theme="light"] .orb {
 
   .stat dd {
     font-size: 22px;
+  }
+
+  .compare {
+    font-size: 13px;
+  }
+
+  .compare th,
+  .compare td {
+    padding: 11px 8px;
+  }
+
+  .compare thead th {
+    font-size: 12px;
+  }
+
+  /* Tool columns shrink to their names, leaving the rest to the feature text. */
+  .compare thead th + th {
+    width: 1%;
   }
 
   .footer-inner {

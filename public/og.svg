@@ -3,10 +3,13 @@
   <rect x="88" y="92" width="1024" height="446" rx="14" fill="#1f1f1f" stroke="#383838"/>
   <text x="130" y="175" fill="#f7f2e8" font-family="Aptos, Helvetica Neue, sans-serif" font-size="76" font-weight="700">Weblua</text>
   <text x="132" y="242" fill="#cfc7b7" font-family="Aptos, Helvetica Neue, sans-serif" font-size="34">Lua 5.1–5.5 and Luau playground</text>
-  <rect x="132" y="306" width="438" height="124" rx="8" fill="#101010" stroke="#383838"/>
-  <text x="162" y="358" fill="#00d4aa" font-family="Consolas, monospace" font-size="30">print("hello, lua")</text>
-  <text x="162" y="398" fill="#f7f2e8" font-family="Consolas, monospace" font-size="26">hello, lua</text>
-  <rect x="624" y="306" width="356" height="124" rx="8" fill="#101010" stroke="#383838"/>
-  <text x="654" y="358" fill="#f7f2e8" font-family="Consolas, monospace" font-size="28">Run in browser</text>
-  <text x="654" y="398" fill="#d7a84f" font-family="Consolas, monospace" font-size="24">Share as a link</text>
+  <rect x="132" y="296" width="540" height="170" rx="8" fill="#101010" stroke="#383838"/>
+  <text x="162" y="348" fill="#00d4aa" font-family="Consolas, monospace" font-size="28">local n: number = "two"</text>
+  <path d="M439 358 q4.8 -6 9.6 0 t9.6 0 t9.6 0 t9.6 0 t9.6 0 t9.6 0 t9.6 0 t9.6 0" fill="none" stroke="#ff6b6b" stroke-width="2.5"/>
+  <text x="162" y="404" fill="#ff8a8a" font-family="Consolas, monospace" font-size="22">Expected this to be 'number',</text>
+  <text x="162" y="436" fill="#ff8a8a" font-family="Consolas, monospace" font-size="22">but got 'string'</text>
+  <rect x="712" y="296" width="356" height="170" rx="8" fill="#101010" stroke="#383838"/>
+  <text x="742" y="352" fill="#f7f2e8" font-family="Consolas, monospace" font-size="28">Run in browser</text>
+  <text x="742" y="396" fill="#00d4aa" font-family="Consolas, monospace" font-size="28">Type-check Luau</text>
+  <text x="742" y="440" fill="#d7a84f" font-family="Consolas, monospace" font-size="28">Share as a link</text>
 </svg>

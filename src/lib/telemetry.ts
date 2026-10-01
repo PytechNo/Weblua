@@ -6,7 +6,8 @@ declare global {
 
 let sentryPromise: Promise<typeof import("@sentry/react") | null> | null = null;
 
-const SHARE_PAYLOAD_PATTERN = /#(c|share)=[A-Za-z0-9_-]+/g;
+// A gist ID is not source, but it is the only key to a secret gist.
+const SHARE_PAYLOAD_PATTERN = /#(c|share|gist)=[A-Za-z0-9_-]+/g;
 
 function redactSharePayload(value: string): string {
   return value.replace(SHARE_PAYLOAD_PATTERN, "#$1=[redacted]");
@@ -56,7 +57,7 @@ export function sanitizeTelemetryEvent<T>(event: T): T {
 
 export function hasSourceBearingHash(hash = window.location.hash): boolean {
   const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
-  return params.has("c") || params.has("share");
+  return params.has("c") || params.has("share") || params.has("gist");
 }
 
 export function initTelemetry(): void {

@@ -29,4 +29,15 @@ describe("playground examples", () => {
     expect(project.flavor).toBe("luau");
     expect(Object.keys(project.files)).toEqual(["lib/countdown.luau", "lib/log.luau", "main.luau"]);
   });
+
+  it("includes a Luau project whose module exports types", () => {
+    const example = examples.find((candidate) => candidate.id === "luau-typed-modules");
+    expect(example).toBeDefined();
+    if (!example) return;
+
+    const project = projectForExample(example);
+    expect(project.flavor).toBe("luau");
+    expect(Object.keys(project.files)).toEqual(["lib/inventory.luau", "main.luau"]);
+    expect(project.files["lib/inventory.luau"]).toContain("export type Item");
+  });
 });

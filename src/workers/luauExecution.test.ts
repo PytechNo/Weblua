@@ -213,6 +213,16 @@ describe("luau task library", () => {
     ]);
   });
 
+  it("runs the built-in typed modules example", async () => {
+    const example = examples.find((candidate) => candidate.id === "luau-typed-modules");
+    expect(example).toBeDefined();
+    if (!example) return;
+
+    const result = await runProjectForTest(projectForExample(example));
+    expect(stderrOf(result)).toEqual([]);
+    expect(stdoutOf(result)).toEqual(["potion now: 5", "arrow\t12", "potion\t5"]);
+  });
+
   it("keeps relative requires working inside tasks", async () => {
     const result = await runProjectForTest(
       luau(`require("./lib/worker").start()`, {

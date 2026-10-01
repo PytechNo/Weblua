@@ -6,7 +6,7 @@ describe("telemetry privacy", () => {
     const event = sanitizeTelemetryEvent({
       message: "failed at #c=2SecretSource",
       request: { url: "https://weblua.com/playground#c=2SecretSource" },
-      exception: { values: [{ value: "opened #share=LegacySource" }] },
+      exception: { values: [{ value: "opened #share=LegacySource" }, { value: "loading #gist=aa5a315d61ae9438b18d" }] },
       breadcrumbs: [
         {
           message: "navigate to #c=2SecretSource",
@@ -18,6 +18,7 @@ describe("telemetry privacy", () => {
     expect(event.message).toBe("failed at #c=[redacted]");
     expect(event.request.url).toBe("https://weblua.com/playground");
     expect(event.exception.values[0].value).toBe("opened #share=[redacted]");
+    expect(event.exception.values[1].value).toBe("loading #gist=[redacted]");
     expect(event.breadcrumbs[0].message).toBe("navigate to #c=[redacted]");
     expect(event.breadcrumbs[0].data.from).toBe("https://weblua.com/");
   });
@@ -25,6 +26,7 @@ describe("telemetry privacy", () => {
   it("recognizes current and legacy source-bearing hashes", () => {
     expect(hasSourceBearingHash("#c=2SourcePayload")).toBe(true);
     expect(hasSourceBearingHash("#share=LegacyPayload")).toBe(true);
+    expect(hasSourceBearingHash("#gist=aa5a315d61ae9438b18d")).toBe(true);
     expect(hasSourceBearingHash("#section=features")).toBe(false);
     expect(hasSourceBearingHash("")).toBe(false);
   });

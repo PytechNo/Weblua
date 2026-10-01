@@ -142,10 +142,36 @@ build of `Luau.Analysis` and tracking upstream releases.
     Luau example.
   - Adds checked types to completion and hover, layered on the stdlib catalog.
   - Positioning copy updated.
+- [x] **Typed modules example**: a module exporting types and a typed table that
+  `main.luau` requires, with a commented-out call the checker rejects (a test
+  uncomments it).
 - [ ] **Download size**: the package build is 1.7 MB gzip against the spike's 713 KB
   `-Oz` build. Switching to an owned `-Oz` build would save ~1 MB on the first Luau
   load, at the cost of owning the build. The package's require hooks are internal
   API, which is also why it is pinned to an exact version.
+
+---
+
+### 7. Sharing and launch
+
+- [x] **Share limit measured, kept**: 32 KiB encoded holds about 85 KB (~2,500 lines)
+  of source, and typed Luau compresses like any other, so projects rarely hit it.
+  The tighter limit is chat: Discord caps a message at 2,000 characters (without
+  Nitro), so even a modest project's link does not fit.
+- [x] **Gist links** (`src/lib/gist.ts`): `#gist=<id>` on `/playground` and `/embed`
+  opens a `.weblua.json` export, or plain `.lua`/`.luau` files, from a GitHub gist;
+  **Projects → Open gist** takes a URL. Read-only, since creating a gist needs a
+  GitHub login and Weblua has no backend; people export and upload it themselves.
+- [x] **Positioning**: meta description, keywords, OG/Twitter text, the OG card
+  (`public/og.svg`, rendered to `og.png`), `featureList` in the SoftwareApplication
+  JSON-LD, the manifest, and the `/playground` route description mention type
+  checking. The landing page has a comparison table against play.luau.org and Roblox
+  Studio, dated, that also says where those tools are the better choice.
+- [ ] **Community posts**: Roblox DevForum (Community Resources), the Luau repository's
+  Show and tell discussions, and r/robloxgamedev. Drafts in `docs/launch-posts.md`.
+  Post only once the type checker is deployed.
+- [ ] **Ask luau.org to link Weblua**: the site (luau-lang/site) has no community-tools
+  page today, so the request is an issue proposing one. Draft in the same file.
 
 ---
 
