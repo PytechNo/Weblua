@@ -300,7 +300,8 @@ VITE_SENTRY_DSN=https://example@sentry.io/project
 ```
 
 Both are optional and disabled when empty. Because Vite inlines them at build time,
-changing either value requires a rebuild.
+changing either value requires a rebuild. For Docker builds, pass them as build
+arguments, for example `--build-arg VITE_PLAUSIBLE_DOMAIN=example.com`.
 
 ## License
 

@@ -12,9 +12,16 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+# Vite inlines VITE_* at build time; without ARG, --build-arg values never reach it.
+# No defaults: a default would override ARGs/secrets Coolify injects earlier in the stage.
+ARG VITE_PLAUSIBLE_DOMAIN
+ARG VITE_SENTRY_DSN
 RUN npm run build
 
 FROM nginx:alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
+# Traefik skips containers still "starting"; Docker < 25 waits one interval before the first probe.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1/
