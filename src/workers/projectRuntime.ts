@@ -964,8 +964,12 @@ export const LUAU_TASK_BOOTSTRAP = `
       end
       if #timers == 0 then return end
 
+      -- Host timers can fire a little early, so sleep again until the timer is due.
       local remaining = timers[1].wake - clock()
-      if remaining > 0 then sleep(remaining) end
+      while remaining > 0 do
+        sleep(remaining)
+        remaining = timers[1].wake - clock()
+      end
       local due = popTimer()
       resume(due.thread, due.args)
     end
