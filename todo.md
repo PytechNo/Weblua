@@ -230,12 +230,16 @@ What the pages above us do differently:
   `/embed` iframe, preloaded with the same snippet. Iframe content counts toward the
   page's LCP, so compare Lighthouse LCP before and after. If it regresses, keep the
   static window and swap in the live embed on first click or focus.
-- [ ] **Give `/playground` its own queries**: the homepage keeps "luau/lua
+- [x] **Give `/playground` its own queries**: the homepage keeps "luau/lua
   playground" (it has 288 of 295 clicks). Change `/playground`'s H1 to match its
   title, "Online Luau & Lua Editor", and add 100–200 words of crawlable text. Queries
   with impressions and no clicks today: "luau online compiler" (18), "luau editor"
   (12), "online luau compiler" (10), "luau online editor" (6).
-- [ ] **Descriptive section headings on the homepage**: "Questions, answered" →
+  Done: the H1 replaces the "Playground" pill in the header, and a 146-word "Online
+  Luau compiler and Lua interpreter" section sits below the first screen, linking to
+  the homepage FAQ. Both live in `PlaygroundShell`, which the postbuild prerenders
+  into `dist/playground/index.html`.
+- [x] **Descriptive section headings on the homepage**: "Questions, answered" →
   "Luau & Lua playground FAQ"; "Three steps. Zero setup." → "How to run Luau online".
   These target "run lua in browser" (15 impressions) and "execute luau" (10). Expect
   a small effect: Google describes headings as helping it understand a page, not as a

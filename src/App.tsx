@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo } from "react";
 import { Landing } from "./components/Landing";
+import { PlaygroundShell } from "./components/PlaygroundShell";
 import { getAppRoute } from "./lib/routes";
 import { useTheme } from "./lib/theme";
 
@@ -37,8 +38,10 @@ export function App() {
     return <Landing theme={theme} onToggleTheme={toggleTheme} />;
   }
 
+  // The fallback matches the shell prerendered into /playground's HTML, so the
+  // header and about text stay put while the editor chunk loads.
   return (
-    <Suspense fallback={<div className={isEmbed ? "app app-embed" : "app"} />}>
+    <Suspense fallback={<PlaygroundShell theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} />}>
       <Playground theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} />
     </Suspense>
   );

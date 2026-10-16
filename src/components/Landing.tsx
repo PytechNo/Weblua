@@ -802,7 +802,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
           <div className="section-head reveal">
             <span className="eyebrow">How it works</span>
             <h2 id="how-title">
-              Three steps. <span className="grad-text">Zero setup.</span>
+              How to run <span className="grad-text">Luau online</span>
             </h2>
           </div>
           <ol className="steps">
@@ -889,9 +889,9 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         {/* ---------- FAQ ---------- */}
         <section className="section section-narrow" id="faq" aria-labelledby="faq-title">
           <div className="section-head reveal">
-            <span className="eyebrow">FAQ</span>
+            <span className="eyebrow">Questions</span>
             <h2 id="faq-title">
-              Questions, <span className="grad-text">answered</span>
+              Luau &amp; Lua playground <span className="grad-text">FAQ</span>
             </h2>
           </div>
           <div className="faq-list">
