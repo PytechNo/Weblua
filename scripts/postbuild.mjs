@@ -4,7 +4,8 @@
 //  2. Emits dist/playground/index.html and dist/embed/index.html with
 //     route-specific <title>/description/canonical tags (nginx's
 //     `try_files $uri $uri/index.html` picks them up), instead of every route claiming
-//     to be the homepage. The embed route is marked noindex.
+//     to be the homepage. The embed route is marked noindex. The playground
+//     route also gets its prerendered shell: header, <h1>, and about text.
 //  3. Adds a modulepreload for the lazily-imported playground chunk to the app
 //     routes, so splitting it out of the landing bundle doesn't cost
 //     /playground an extra round trip.
@@ -40,7 +41,7 @@ function replaceOnce(html, pattern, replacement, label) {
   return next;
 }
 
-function routeHtml({ title, description, canonical, noindex }) {
+function routeHtml({ title, description, canonical, noindex, markup }) {
   let html = replaceOnce(
     template,
     "</head>",
@@ -77,7 +78,32 @@ function routeHtml({ title, description, canonical, noindex }) {
       "canonical (noindex insert)"
     );
   }
+  if (markup) {
+    html = replaceOnce(html, '<div id="root"></div>', `<div id="root">${markup}</div>`, '<div id="root">');
+  }
   return html;
+}
+
+const server = await createServer({
+  configFile: path.join(repoRoot, "vite.config.ts"),
+  server: { middlewareMode: true },
+  appType: "custom",
+  logLevel: "error"
+});
+
+let landingMarkup;
+let playgroundMarkup;
+try {
+  const { renderLanding, renderPlaygroundShell } = await server.ssrLoadModule("/src/entry-prerender.tsx");
+  landingMarkup = renderLanding();
+  playgroundMarkup = renderPlaygroundShell();
+} finally {
+  await server.close();
+}
+for (const [label, markup] of [["landing", landingMarkup], ["playground", playgroundMarkup]]) {
+  if (!markup.includes("<h1")) {
+    throw new Error(`postbuild: prerendered ${label} markup is missing its <h1>`);
+  }
 }
 
 const routes = [
@@ -87,7 +113,8 @@ const routes = [
     description:
       "Write, run, type-check, and share multi-file Luau and Lua 5.1–5.5 projects in your browser. Switch runtimes instantly; no account or install needed.",
     canonical: "https://weblua.com/playground",
-    noindex: false
+    noindex: false,
+    markup: playgroundMarkup
   },
   {
     dir: "embed",
@@ -105,27 +132,11 @@ for (const route of routes) {
   console.log(`postbuild: wrote dist/${route.dir}/index.html`);
 }
 
-const server = await createServer({
-  configFile: path.join(repoRoot, "vite.config.ts"),
-  server: { middlewareMode: true },
-  appType: "custom",
-  logLevel: "error"
-});
-
-try {
-  const { renderLanding } = await server.ssrLoadModule("/src/entry-prerender.tsx");
-  const markup = renderLanding();
-  if (!markup.includes("<h1")) {
-    throw new Error("postbuild: prerendered landing markup is missing its <h1>");
-  }
-  const prerendered = replaceOnce(
-    template,
-    '<div id="root"></div>',
-    `<div id="root">${markup}</div>`,
-    '<div id="root">'
-  );
-  writeFileSync(path.join(dist, "index.html"), prerendered);
-  console.log(`postbuild: prerendered landing into dist/index.html (${(markup.length / 1024).toFixed(1)} kB of markup)`);
-} finally {
-  await server.close();
-}
+const prerendered = replaceOnce(
+  template,
+  '<div id="root"></div>',
+  `<div id="root">${landingMarkup}</div>`,
+  '<div id="root">'
+);
+writeFileSync(path.join(dist, "index.html"), prerendered);
+console.log(`postbuild: prerendered landing into dist/index.html (${(landingMarkup.length / 1024).toFixed(1)} kB of markup)`);

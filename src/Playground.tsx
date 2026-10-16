@@ -12,7 +12,6 @@ import {
   FilePlus2,
   FolderOpen,
   Link,
-  Moon,
   Pencil,
   Play,
   Plus,
@@ -20,7 +19,6 @@ import {
   Save,
   ShieldCheck,
   Square,
-  Sun,
   Timer,
   Trash2,
   Upload,
@@ -28,7 +26,8 @@ import {
   X
 } from "lucide-react";
 import { type ChangeEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitHubMark, MoonMark } from "./components/Brand";
+import { GitHubMark } from "./components/Brand";
+import { PlaygroundShell } from "./components/PlaygroundShell";
 import { SwapLabel } from "./components/SwapLabel";
 import { luaSupport, refreshLuaContext } from "./lang/lua";
 import { checkProject } from "./lib/checker";
@@ -980,38 +979,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const activeNamedProject = projects.find((project) => project.id === workspace.activeProjectId);
 
   return (
-    <div className={isEmbed ? "app app-embed" : "app"}>
-      {!isEmbed && (
-        <header className="app-header">
-          <a className="brand" href="/" aria-label="Weblua home">
-            <MoonMark size={26} />
-            <h1>Weblua</h1>
-            <span className="brand-tag">Playground</span>
-          </a>
-          <div className="header-actions">
-            <a
-              className="icon-button"
-              href="https://github.com/PytechNo/Weblua"
-              target="_blank"
-              rel="noreferrer"
-              title="Open GitHub repository"
-              aria-label="Open GitHub repository"
-            >
-              <GitHubMark size={17} />
-            </a>
-            <button
-              className="icon-button"
-              type="button"
-              onClick={onToggleTheme}
-              title={theme === "dark" ? "Use light theme" : "Use dark theme"}
-              aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}
-            >
-              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-          </div>
-        </header>
-      )}
-
+    <PlaygroundShell theme={theme} onToggleTheme={onToggleTheme} isEmbed={isEmbed}>
       <main className="workspace">
         <div className="toolbar" aria-label="Playground controls">
           <label className="control">
@@ -1321,9 +1289,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
           </aside>
         </div>
       </main>
-
-      {!isEmbed && <footer className="seo-line">Weblua runs Lua and Luau projects entirely in your browser. Named projects, draft recovery, and shared source never require an account.</footer>}
-    </div>
+    </PlaygroundShell>
   );
 }
 
