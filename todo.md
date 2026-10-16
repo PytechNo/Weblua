@@ -226,10 +226,18 @@ What the pages above us do differently:
 - `/playground` renders only "Weblua" as its H1 and ~110 words, mostly UI labels.
   Search Console has it at position ~11.
 
-- [ ] **Runnable editor in the homepage hero**: replace `HeroCodeWindow` with the
+- [x] **Runnable editor in the homepage hero**: replace `HeroCodeWindow` with the
   `/embed` iframe, preloaded with the same snippet. Iframe content counts toward the
   page's LCP, so compare Lighthouse LCP before and after. If it regresses, keep the
   static window and swap in the live embed on first click or focus.
+  Done, the fallback way. Lighthouse 13.5 on a local production build (3 mobile runs,
+  2 desktop): the eager iframe pushed mobile LCP from 2.4 s to 3.4 s (score 0.98 →
+  0.88) and desktop from 0.5 s to 0.6–0.8 s; the LCP element stayed the hero `<h1>`,
+  so the cost was the embed competing for network and CPU. The static window now has
+  a "Try it live" button (clicking anywhere on it works too) that swaps in
+  `/embed#c=…` with the same `fibonacci.lua` on Lua 5.4; mobile LCP is back to 2.4 s
+  and desktop to 0.5 s. The embed has no autorun, so the visitor presses Run once
+  inside it.
 - [x] **Give `/playground` its own queries**: the homepage keeps "luau/lua
   playground" (it has 288 of 295 clicks). Change `/playground`'s H1 to match its
   title, "Online Luau & Lua Editor", and add 100–200 words of crawlable text. Queries

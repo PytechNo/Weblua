@@ -20,7 +20,7 @@ import {
   X,
   Zap
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { GitHubMark, MoonMark } from "./Brand";
 
 type Theme = "dark" | "light";
@@ -57,7 +57,7 @@ function useScrollReveal() {
   }, []);
 }
 
-const HERO_CODE: Array<{ text: string; kind: "comment" | "code" }> = [
+export const HERO_CODE: Array<{ text: string; kind: "comment" | "code" }> = [
   { text: "-- fibonacci.lua", kind: "comment" },
   { text: "local function fib(n)", kind: "code" },
   { text: "  if n < 2 then return n end", kind: "code" },
@@ -69,28 +69,37 @@ const HERO_CODE: Array<{ text: string; kind: "comment" | "code" }> = [
   { text: "end", kind: "code" }
 ];
 
-function HeroCodeWindow() {
-  const [runKey, setRunKey] = useState(0);
-  const [showOutput, setShowOutput] = useState(false);
-  const timer = useRef<number | null>(null);
+/** HERO_CODE as a Lua 5.4 `fibonacci.lua` project; Landing.test.tsx keeps the two in step. */
+export const HERO_EMBED_SRC =
+  "/embed#c=2XYxBCsIwFESvMvyVwbTQoiBBb5JNTBP8EH4gphUpvbu0qKDLmfdmZprI9JpiclMuZCiN7nggTUFqeZKhyNcszntu0-hIU-QU7mTmP2CoafBTWUnZu4Q4iq-cZaU7UVYAjhCc0aPegqCEOhaBIMiw0nfedDToFPbf0Csrm2Yl5gLGBZ3GCUPefnP7KFzDbtVZaViCpc-EluUF";
 
-  const run = useCallback(() => {
-    setShowOutput(false);
-    setRunKey((key) => key + 1);
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setShowOutput(true), 420);
-  }, []);
+/**
+ * A static preview that becomes the live /embed editor on first click. Loading the
+ * embed up front pushed Lighthouse mobile LCP from 2.4 s to 3.4 s.
+ */
+function HeroCodeWindow() {
+  const [live, setLive] = useState(false);
+  const [showOutput, setShowOutput] = useState(false);
 
   useEffect(() => {
-    const auto = window.setTimeout(run, 1400);
-    return () => {
-      window.clearTimeout(auto);
-      if (timer.current) window.clearTimeout(timer.current);
-    };
-  }, [run]);
+    const timer = window.setTimeout(() => setShowOutput(true), 1800);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (live) {
+    return (
+      <iframe
+        className="hero-window hero-embed"
+        src={HERO_EMBED_SRC}
+        title="Weblua editor with fibonacci.lua"
+        // React's autoFocus skips iframes; this keeps keyboard focus where the button was.
+        ref={(frame) => frame?.focus()}
+      />
+    );
+  }
 
   return (
-    <div className="hero-window" role="img" aria-label="Weblua editor running a Lua fibonacci snippet">
+    <div className="hero-window" onClick={() => setLive(true)}>
       <div className="hero-window-bar">
         <span className="window-dots" aria-hidden="true">
           <i />
@@ -98,12 +107,12 @@ function HeroCodeWindow() {
           <i />
         </span>
         <span className="hero-window-title">fibonacci.lua</span>
-        <button className="hero-run" type="button" onClick={run}>
+        <button className="hero-run" type="button">
           <Play size={13} />
-          Run
+          Try it live
         </button>
       </div>
-      <pre className="hero-code" aria-hidden="true">
+      <pre className="hero-code">
         {HERO_CODE.map((line, index) => (
           <span
             className={`hero-line hero-line-${line.kind}`}
@@ -115,7 +124,7 @@ function HeroCodeWindow() {
           </span>
         ))}
       </pre>
-      <div className={showOutput ? "hero-output is-live" : "hero-output"} key={runKey} aria-hidden="true">
+      <div className={showOutput ? "hero-output is-live" : "hero-output"} aria-hidden="true">
         <span className="hero-output-label">
           <Terminal size={12} />
           output
