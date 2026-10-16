@@ -191,6 +191,106 @@ build of `Luau.Analysis` and tracking upstream releases.
 
 ---
 
+### 9. Search ranking for "luau playground" and "lua playground"
+Search Console, 18 Aug–14 Oct 2026: 295 clicks, 5,153 impressions, 5.7% CTR. Weekly
+clicks rose from 8 to 69 and average position from ~19 to ~6. The brand query
+"weblua" brings 111 clicks (38%). The gap is the two generic queries:
+
+| Query | Impressions | Avg position | Clicks |
+|---|---|---|---|
+| luau playground | 1,572 | 6.7 | 25 (1.6%) |
+| lua playground | 699 | 9.1 | 13 (1.9%) |
+
+Google results (US, English, logged out) checked three times on 2026-10-16; positions
+moved between runs:
+
+- **"luau playground"**: Weblua #6–#8. Above it in every run: play.luau.org,
+  luau.org, and github.com/luau-lang/playground (the official project), plus
+  xnasuni.github.io/luau-web and a Reddit cluster that includes our own r/lua launch
+  post. codapi.org/lua was above us in one run. The top 3 is the official project, so
+  the realistic target is #4.
+- **"lua playground"**: Weblua #6 in both runs, below codapi.org/lua,
+  coddy.tech/playground/lua, play.luau.org, lua.org/demo, and an r/lua thread. This
+  top 3 can be beaten.
+
+What the pages above us do differently:
+
+- The tool sites (play.luau.org, luau-web, codapi, Coddy) run code on the URL that
+  ranks. Our ranking URL is the homepage, whose hero (`HeroCodeWindow` in
+  `Landing.tsx`) is a `role="img"` animation with output faked on a timer. luau.org,
+  GitHub, lua.org/demo, and Reddit have no editor and rank on authority.
+- They match the query exactly. codapi.org/lua is 108 words titled and headed "Lua
+  playground". Coddy has separate `/playground/lua` and `/playground/luau` pages
+  (~800 words each) with headings like "What makes this Lua playground useful" and
+  "Online Lua compiler FAQ".
+- `/playground` renders only "Weblua" as its H1 and ~110 words, mostly UI labels.
+  Search Console has it at position ~11.
+
+- [ ] **Runnable editor in the homepage hero**: replace `HeroCodeWindow` with the
+  `/embed` iframe, preloaded with the same snippet. Iframe content counts toward the
+  page's LCP, so compare Lighthouse LCP before and after. If it regresses, keep the
+  static window and swap in the live embed on first click or focus.
+- [ ] **Give `/playground` its own queries**: the homepage keeps "luau/lua
+  playground" (it has 288 of 295 clicks). Change `/playground`'s H1 to match its
+  title, "Online Luau & Lua Editor", and add 100–200 words of crawlable text. Queries
+  with impressions and no clicks today: "luau online compiler" (18), "luau editor"
+  (12), "online luau compiler" (10), "luau online editor" (6).
+- [ ] **Descriptive section headings on the homepage**: "Questions, answered" →
+  "Luau & Lua playground FAQ"; "Three steps. Zero setup." → "How to run Luau online".
+  These target "run lua in browser" (15 impressions) and "execute luau" (10). Expect
+  a small effect: Google describes headings as helping it understand a page, not as a
+  strong ranking factor.
+- [ ] **Links from where the audience is** (76% of clicks are desktop; Roblox
+  developers): this is the open community-posts and luau.org items in 7. luau-web,
+  which ranks #4–#7, has a DevForum Community Resources post (Sep 2025) behind it.
+  seaofvoices/awesome-luau lists npm packages only, so it is not an option.
+- [ ] **Only if "lua playground" stalls**: exact-match `/lua` and `/luau` pages, as
+  Coddy and codapi have. `scripts/postbuild.mjs` already generates per-route HTML,
+  so this is mostly route config, an nginx location, and the router.
+
+No action needed:
+
+- Google shows the footer tagline as our snippet, not the meta description. Google
+  builds snippets mainly from page content, so this is expected.
+- The `#access`, `#features`, and similar rows in Search Console are expected: Google
+  reports a fragment URL when a search feature links to a section of the page.
+- `http://weblua.com/playground/` (10 impressions): nginx already 301s
+  `/playground/` to `/playground`.
+
+Fact-check notes (2026-10-16), including corrections to the first read:
+
+- The query table lists 101 named queries totaling 178 clicks. The other 117 come from
+  rare queries Google hides for privacy, which still count in the totals. (The first
+  read said "top 100 queries"; it isn't a cap.)
+- Not every result above us runs code: luau.org, GitHub, lua.org/demo (links out to
+  other sites), and Reddit don't.
+- The Reddit result is our own launch post grouped with other r/lua threads, not a
+  third party recommending Weblua.
+- CTR studies put position 3 at about 10–11% (First Page Sage 10.2%, via Coursera;
+  Sistrix 11%, via SEJ), and AI Overviews push these numbers down (GrowthSRC: position
+  1 fell from 28% to 19%). ~150 clicks from "luau playground" in the top 3 is an upper
+  bound, and that top 3 is held by the official project.
+- Google's use of click data (NavBoost) comes from 2023 DOJ trial testimony, known
+  through secondary reports. How much a quick return to the results counts is not
+  public.
+- Ranking changes usually take weeks to months to show.
+
+Sources: [Search Console anonymized queries](https://support.google.com/webmasters/answer/7576553),
+[Google snippet docs](https://developers.google.com/search/docs/appearance/snippet),
+[web.dev LCP and iframes](https://web.dev/articles/lcp),
+[CTR, First Page Sage via Coursera](https://www.coursera.org/articles/what-is-serp),
+[CTR, Sistrix via SEJ](https://www.searchenginejournal.com/google-first-page-clicks/),
+[CTR, GrowthSRC via SEJ](https://www.searchenginejournal.com/google-ctrs-drop-32-for-top-result-after-ai-overview-rollout/551730/),
+[headings (SEJ on Mueller)](https://www.searchenginejournal.com/google-heading-tags-important/377592/),
+[fragment URLs in GSC (SEJ)](https://searchenginejournal.com/google-reassures-that-anchor-urls-in-gsc-are-okay/539811),
+[NavBoost overview](https://www.hobo-web.co.uk/navboost-how-google-uses-large-scale-user-interaction-data-to-rank-websites/),
+[luau-web DevForum post](https://devforum.roblox.com/t/luau-web-luau-bindings-with-dynamic-javascript-interop-for-web-browsers-nodejs-and-typescript/3920716),
+[awesome-luau](https://github.com/seaofvoices/awesome-luau),
+[codapi.org/lua](https://codapi.org/lua/), [coddy.tech/playground/lua](https://coddy.tech/playground/lua),
+[play.luau.org](https://play.luau.org), [luau.org](https://luau.org), [lua.org/demo](https://www.lua.org/demo.html).
+
+---
+
 ### Deferred — needs a product decision first
 - **Standalone-runtime namespace (Lute)**: `fs`, `serde`, and a `@lute/*`/`@std/*`
   veneer only serve standalone-runtime users; Roblox has no `fs`. If pursued, target
