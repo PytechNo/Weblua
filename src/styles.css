@@ -21,7 +21,7 @@
   /* Ink */
   --text: #eef1fb;
   --muted: #9aa4c7;
-  --muted-2: #656f95;
+  --muted-2: #717ba1;
 
   /* Brand */
   --primary: #5b7cff;
@@ -68,7 +68,7 @@ body[data-theme="light"] {
 
   --text: #171c33;
   --muted: #59628a;
-  --muted-2: #8b93b8;
+  --muted-2: #626a90;
 
   --primary: #4055e8;
   --primary-soft: #5b7cff;
@@ -747,6 +747,11 @@ body[data-theme="light"] .orb {
   transform: translateY(-2px);
 }
 
+/* The dimming opacity drops light-theme --muted below 4.5:1 contrast. */
+body[data-theme="light"] .proof-logos li {
+  opacity: 1;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1393,7 +1398,7 @@ body[data-theme="light"] .orb {
   gap: 10px;
 }
 
-.footer-col h4 {
+.footer-col h2 {
   margin: 0 0 6px;
   font-size: 13px;
   font-weight: 700;

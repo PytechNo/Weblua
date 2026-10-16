@@ -941,7 +941,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             </p>
           </div>
           <nav className="footer-col" aria-label="Product">
-            <h4>Product</h4>
+            <h2>Product</h2>
             <a href="/playground">Playground</a>
             <a href="#features">Features</a>
             <a href="#compare">Compare</a>
@@ -949,7 +949,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <a href="#faq">FAQ</a>
           </nav>
           <nav className="footer-col" aria-label="Resources">
-            <h4>Resources</h4>
+            <h2>Resources</h2>
             <a href="https://www.lua.org/manual/5.5/" target="_blank" rel="noreferrer">
               Lua 5.5 manual
             </a>
@@ -964,7 +964,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             </a>
           </nav>
           <nav className="footer-col" aria-label="Community">
-            <h4>Community</h4>
+            <h2>Community</h2>
             <a href="https://github.com/PytechNo/Weblua" target="_blank" rel="noreferrer">
               GitHub
             </a>
