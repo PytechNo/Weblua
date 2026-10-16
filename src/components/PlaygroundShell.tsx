@@ -1,7 +1,19 @@
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Theme } from "../lib/theme";
 import { GitHubMark, MoonMark } from "./Brand";
+
+/** Read by index.html's pre-paint script, which hides the card on later visits. */
+const ABOUT_DISMISSED_KEY = "weblua:about-dismissed";
+
+function dismissAbout() {
+  document.body.dataset.aboutDismissed = "";
+  try {
+    window.localStorage.setItem(ABOUT_DISMISSED_KEY, "1");
+  } catch {
+    // Still hidden for this visit when browser storage is unavailable.
+  }
+}
 
 interface PlaygroundShellProps {
   theme: Theme;
@@ -13,7 +25,7 @@ interface PlaygroundShellProps {
 
 /**
  * The playground's page frame: the header with the page's <h1>, and the about
- * text under the workspace. It stays out of Playground.tsx so the build can
+ * text, a dismissible card on desktop. It stays out of Playground.tsx so the build can
  * prerender it into dist/playground/index.html for crawlers that don't run JS,
  * and so App's Suspense fallback paints the same markup until the editor loads.
  */
@@ -75,6 +87,15 @@ export function PlaygroundShell({ theme, onToggleTheme, isEmbed, children }: Pla
             services and instances aren't available. More in the{" "}
             <a href="/#faq">Luau &amp; Lua playground FAQ</a>.
           </p>
+          <button
+            className="icon-button playground-about-close"
+            type="button"
+            onClick={dismissAbout}
+            title="Dismiss"
+            aria-label="Dismiss about Weblua"
+          >
+            <X size={16} />
+          </button>
         </section>
       )}
     </div>

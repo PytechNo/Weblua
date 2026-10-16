@@ -139,11 +139,14 @@
   </head>
   <body>
     <script>
-      // Apply the shared preference before the prerendered page paints.
+      // Apply saved preferences before the prerendered page paints.
       (() => {
         let theme;
         try {
           theme = window.localStorage.getItem("weblua:theme");
+          if (window.localStorage.getItem("weblua:about-dismissed")) {
+            document.body.dataset.aboutDismissed = "";
+          }
         } catch {}
         if (theme !== "dark" && theme !== "light") {
           theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";

@@ -236,9 +236,11 @@ What the pages above us do differently:
   with impressions and no clicks today: "luau online compiler" (18), "luau editor"
   (12), "online luau compiler" (10), "luau online editor" (6).
   Done: the H1 replaces the "Playground" pill in the header, and a 146-word "Online
-  Luau compiler and Lua interpreter" section sits below the first screen, linking to
-  the homepage FAQ. Both live in `PlaygroundShell`, which the postbuild prerenders
-  into `dist/playground/index.html`.
+  Luau compiler and Lua interpreter" section links to the homepage FAQ. On desktop it
+  is a dismissible card over the output pane, remembered in localStorage; on phones it
+  sits below the first screen. Crawlers keep no storage, so they always see it. Both
+  live in `PlaygroundShell`, which the postbuild prerenders into
+  `dist/playground/index.html`.
 - [x] **Descriptive section headings on the homepage**: "Questions, answered" →
   "Luau & Lua playground FAQ"; "Three steps. Zero setup." → "How to run Luau online".
   These target "run lua in browser" (15 impressions) and "execute luau" (10). Expect

@@ -1516,12 +1516,6 @@ body[data-theme="light"] .orb {
   gap: 10px;
 }
 
-/* Header (60px) plus workspace fill the first screen, so the about text below
-   takes no height from the editor and doesn't move while the editor loads. */
-.app-header + .workspace {
-  min-height: calc(100svh - 60px);
-}
-
 .toolbar {
   position: relative;
   min-height: 56px;
@@ -2469,35 +2463,56 @@ body[data-theme="light"] .orb {
   color: var(--danger);
 }
 
+/* A first-visit card floating over the workspace's bottom-right corner, so it
+   costs the layout nothing. Once dismissed, index.html's pre-paint script keeps
+   it hidden; crawlers keep no storage, so they always get the text. */
 .playground-about {
-  flex: 0 0 auto;
-  padding: 26px 18px 34px;
-  border-top: 1px solid var(--border);
+  position: fixed;
+  /* The workspace's 14px padding plus 12px, so it sits inside the output pane. */
+  right: 26px;
+  bottom: 26px;
+  z-index: 10;
+  width: min(400px, calc(100vw - 36px));
+  max-height: calc(100svh - 96px);
+  overflow: auto;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-card), var(--shadow-pop);
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.playground-about h2,
-.playground-about p {
-  max-width: 72ch;
+body[data-about-dismissed] .playground-about {
+  display: none;
 }
 
 .playground-about h2 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
+  padding-right: 40px;
   color: var(--text);
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.35;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .playground-about p {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 
-.playground-about p:last-child {
+.playground-about p:last-of-type {
   margin-bottom: 0;
+}
+
+.playground-about-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
 }
 
 .playground-about a {
@@ -2661,6 +2676,25 @@ body[data-theme="light"] .orb {
   .panes {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(330px, 52svh) minmax(220px, 34svh);
+  }
+
+  /* Phones scroll anyway, so the about text sits in flow under the panes, and
+     the workspace keeps it below the first screen while the editor loads. */
+  .app-header + .workspace {
+    min-height: calc(100svh - 60px);
+  }
+
+  .playground-about {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: auto;
+    max-height: none;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
   }
 
   .editor-workbench {
