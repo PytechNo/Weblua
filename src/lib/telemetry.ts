@@ -1,6 +1,7 @@
 declare global {
   interface Window {
     plausible?: (eventName: string, options?: { props?: Record<string, unknown> }) => void;
+    umami?: { track: (eventName: string, data?: Record<string, unknown>) => void };
   }
 }
 
@@ -75,10 +76,23 @@ export function initTelemetry(): void {
     script.src = "https://plausible.io/js/script.js";
     document.head.appendChild(script);
   }
+
+  const umamiScriptUrl = import.meta.env.VITE_UMAMI_SCRIPT_URL;
+  const umamiWebsiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID;
+  if (umamiScriptUrl && umamiWebsiteId && !document.querySelector("script[data-website-id]")) {
+    const script = document.createElement("script");
+    script.defer = true;
+    script.dataset.websiteId = umamiWebsiteId;
+    // Umami reports the full URL by default, and share links put source in the fragment.
+    script.dataset.excludeHash = "true";
+    script.src = umamiScriptUrl;
+    document.head.appendChild(script);
+  }
 }
 
 export function trackEvent(eventName: string, props?: Record<string, unknown>): void {
   window.plausible?.(eventName, props ? { props } : undefined);
+  window.umami?.track(eventName, props);
 }
 
 export function reportRuntimeError(error: unknown): void {

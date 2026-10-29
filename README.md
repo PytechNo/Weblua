@@ -194,13 +194,14 @@ Normal execution does not upload project source to a code-execution service. Sha
 places source in a URL fragment only when the user requests a link or embed. Opening a
 `#gist=` link, or a gist from **Projects**, downloads that gist from `api.github.com`.
 
-Deployments may optionally enable Plausible usage events and Sentry error reporting.
+Deployments may optionally enable Plausible or Umami usage events and Sentry error reporting.
 The tracked product events contain runtime/status metadata rather than source. Sentry
 is configured without default PII, and Weblua strips URL fragments and redacts `#c=`,
 `#share=`, and `#gist=` values from error events and navigation breadcrumbs before
 sending. Plausible is not loaded on a URL that contains a current or legacy source
-payload or a gist ID (the only key to a secret gist).
-Leave both environment variables unset to disable these integrations completely.
+payload or a gist ID (the only key to a secret gist). Umami is told to drop URL
+fragments, which hold those values, from every page and referrer it reports.
+Leave the environment variables unset to disable these integrations completely.
 
 ## Browser requirements
 

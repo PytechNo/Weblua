@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { hasSourceBearingHash, sanitizeTelemetryEvent } from "./telemetry";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { hasSourceBearingHash, initTelemetry, sanitizeTelemetryEvent } from "./telemetry";
 
 describe("telemetry privacy", () => {
   it("removes source-bearing share fragments from telemetry fields", () => {
@@ -29,5 +29,34 @@ describe("telemetry privacy", () => {
     expect(hasSourceBearingHash("#gist=aa5a315d61ae9438b18d")).toBe(true);
     expect(hasSourceBearingHash("#section=features")).toBe(false);
     expect(hasSourceBearingHash("")).toBe(false);
+  });
+
+  describe("Umami", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      document.head.querySelector("script[data-website-id]")?.remove();
+      window.location.hash = "";
+    });
+
+    it("loads with URL fragments excluded", () => {
+      vi.stubEnv("VITE_UMAMI_SCRIPT_URL", "https://umami.example.com/script.js");
+      vi.stubEnv("VITE_UMAMI_WEBSITE_ID", "site-id");
+      initTelemetry();
+
+      const script = document.head.querySelector<HTMLScriptElement>("script[data-website-id]");
+      expect(script?.src).toBe("https://umami.example.com/script.js");
+      expect(script?.dataset.websiteId).toBe("site-id");
+      expect(script?.dataset.excludeHash).toBe("true");
+    });
+
+    it("still loads, with fragments excluded, on a source-bearing URL", () => {
+      vi.stubEnv("VITE_UMAMI_SCRIPT_URL", "https://umami.example.com/script.js");
+      vi.stubEnv("VITE_UMAMI_WEBSITE_ID", "site-id");
+      window.location.hash = "#c=2SourcePayload";
+      initTelemetry();
+
+      const script = document.head.querySelector<HTMLScriptElement>("script[data-website-id]");
+      expect(script?.dataset.excludeHash).toBe("true");
+    });
   });
 });

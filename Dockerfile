@@ -16,6 +16,8 @@ COPY . .
 # No defaults: a default would override ARGs/secrets Coolify injects earlier in the stage.
 ARG VITE_PLAUSIBLE_DOMAIN
 ARG VITE_SENTRY_DSN
+ARG VITE_UMAMI_SCRIPT_URL
+ARG VITE_UMAMI_WEBSITE_ID
 RUN npm run build
 
 FROM nginx:alpine
