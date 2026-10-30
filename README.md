@@ -237,8 +237,9 @@ until the catalog is updated.
 ## Scripts
 
 - `npm run dev` starts the Vite development server.
-- `npm run build` type-checks, builds, writes static `/playground` and `/embed`
-  entry pages, and prerenders the landing page.
+- `npm run build` type-checks, builds, writes static `/playground`, `/embed`, and
+  tool-page (`/lua-formatter`, `/luau-type-checker`) entry pages, and prerenders the
+  landing page.
 - `npm run preview` serves the production build locally.
 - `npm test` runs the project, codec, gist, persistence, routing, telemetry, editor
   language, stdlib catalog, formatter, Luau regression, Luau analysis, and Luau
@@ -256,7 +257,8 @@ docker run --rm -p 8080:80 weblua
 ```
 
 Open `http://localhost:8080`. The nginx configuration serves hashed assets with
-long-lived caching and provides route fallback for `/playground` and `/embed`.
+long-lived caching and provides route fallback for `/playground`, `/embed`, and the
+tool pages.
 
 For a complete hosted deployment walkthrough, see
 [`docs/coolify-deployment.md`](docs/coolify-deployment.md).

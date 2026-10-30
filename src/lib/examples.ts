@@ -1,5 +1,6 @@
 import capabilityTourDocument from "../../examples/weblua-capability-tour.weblua.json";
 import { assertProjectPayload, projectFromSnippet } from "./project";
+import type { ToolPage } from "./routes";
 import type { PlaygroundExample, ProjectPayload } from "./types";
 
 export const examples: PlaygroundExample[] = [
@@ -316,6 +317,49 @@ return log`
 ];
 
 export const defaultExample = examples[0];
+
+/**
+ * What each tool page opens with. Kept out of `examples`: the type checker's
+ * demo has a deliberate type error, and neither belongs in the example picker.
+ */
+export const toolExamples: Record<ToolPage, PlaygroundExample> = {
+  formatter: {
+    id: "formatter-demo",
+    title: "Unformatted Lua",
+    flavor: "lua54",
+    code: `-- Press Format (Shift+Alt+F) to tidy this up with StyLua.
+local function   fib( n )
+if n<2 then return n end
+    return fib(n-1)+fib( n-2 )
+end
+local results={}
+for i=1,10 do results[#results+1]=fib(i) end
+print(table.concat(results,", "))`
+  },
+  "type-checker": {
+    id: "type-checker-demo",
+    title: "Luau type error",
+    flavor: "luau",
+    code: `--!strict
+-- The type checker runs as you type. Hover the underlined value to see why.
+type Item = { name: string, price: number }
+
+local function total(items: { Item }): number
+  local sum = 0
+  for _, item in items do
+    sum += item.price
+  end
+  return sum
+end
+
+local cart: { Item } = {
+  { name = "sword", price = 120 },
+  { name = "shield", price = "80" },
+}
+
+print(total(cart))`
+  }
+};
 
 export function projectForExample(example: PlaygroundExample): ProjectPayload {
   return "project" in example

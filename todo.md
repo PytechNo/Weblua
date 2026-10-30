@@ -376,6 +376,53 @@ Work through the following in priority order:
 
 ---
 
+### 11. Pages beyond "playground" searches
+Search Console, 18 Aug–28 Oct 2026: 514 clicks, ~15 a day in the last two weeks, at an
+average position of ~6. Ranking #1 for every playground-type query we already appear
+for would bring roughly 1,700 clicks a month, assuming a ~30% click rate. That is the
+ceiling for these queries. Pages for other searches raise it. Demand comes from Google
+autocomplete and the pages ranking on 2026-10-30, not keyword volumes, so re-rank from
+Search Console once pages are live.
+
+Each page needs a unique title, description, and canonical in `scripts/postbuild.mjs`,
+prerendered text with an `<h1>`, a sitemap entry, and the nginx trailing-slash fold.
+
+- [x] **`/lua-formatter`**: the playground, opening on an unformatted Lua 5.4 demo, with
+  its own `<h1>` and about text (`TOOL_PAGES` in `PlaygroundShell.tsx`). Targets "lua
+  formatter online" and "luau formatter"; no online StyLua page found.
+- [x] **`/luau-type-checker`**: the same, opening on a strict Luau demo with one type
+  error (pinned by a test). Targets "luau type checking" and "luau strict mode"; no
+  browser option found. Tool pages neither restore nor save the draft, so they can't
+  overwrite `/playground`'s.
+- [ ] **`/lua-vs-luau`**: run the same code on Lua 5.1 and Luau side by side. The pages
+  ranking now (DevForum, GeeksforGeeks, Codecademy) disagree, for example on `continue`.
+  Autocomplete: "lua vs luau" with differences / performance / syntax / roblox, and
+  "lua 5.1 vs luau".
+- [ ] **`/lua-pattern-tester`**: `string.find`/`match`/`gmatch` with highlighted captures
+  on every runtime. Competitors are small fengari (Lua 5.3) GitHub Pages tools.
+  Autocomplete: "lua pattern tester", "lua pattern matching online", "lua patterns
+  cheat sheet".
+- [ ] **Target "online lua compiler"**: "lua online compiler / interpreter / editor /
+  ide" sit at position 42–48 today against myCompiler, OneCompiler, JDoodle, and Replit.
+  Try `/playground`'s title and about text first; separate exact-match pages only if
+  that stalls (see the last open item in 9).
+- [ ] **`/examples` hub with 6–8 runnable pages**: string split / format / interpolation,
+  metatables and `__index`, Luau OOP, Luau types. Each shows its output on 5.1, 5.4, and
+  Luau. Write each by hand; don't mass-generate thin pages.
+- [ ] **`/lua-5-1-vs-5-4`**: same shape as Lua vs Luau ("lua 5.1 vs 5.4").
+- [ ] **`/lua-table-to-json`** (and JSON to Lua table): evaluate the literal in the
+  sandbox and serialize it. Competitors are generic tool sites (DevToolLab).
+- [ ] **`/luau-bytecode-viewer`**: the Bytecode tab as a tool page. Low volume, cheap.
+- [ ] **`/learn-luau` lessons**, after the items above show which audience arrives: short
+  lessons with checked exercises, pure Luau (Roblox value types stay Deferred below).
+  "learn luau free / online", "roblox scripting tutorial", and "roblox studio
+  chromebook" are common searches; never present Weblua as Studio.
+- Avoid: obfuscator, deobfuscator, decompiler, executor, "unc test", and script hubs.
+  They have volume, but they bring an exploit audience that sponsors and ad networks
+  avoid.
+
+---
+
 ### Deferred — needs a product decision first
 - **Standalone-runtime namespace (Lute)**: `fs`, `serde`, and a `@lute/*`/`@std/*`
   veneer only serve standalone-runtime users; Roblox has no `fs`. If pursued, target

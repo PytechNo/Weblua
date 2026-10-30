@@ -952,6 +952,8 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
           <nav className="footer-col" aria-label="Product">
             <h2>Product</h2>
             <a href="/playground">Playground</a>
+            <a href="/lua-formatter">Lua formatter</a>
+            <a href="/luau-type-checker">Luau type checker</a>
             <a href="#features">Features</a>
             <a href="#compare">Compare</a>
             <a href="#access">Access</a>

@@ -16,6 +16,7 @@ const Playground = lazy(() => import("./Playground"));
 export function App() {
   const route = useMemo(() => getAppRoute(), []);
   const isEmbed = route.mode === "embed";
+  const tool = route.mode === "playground" ? route.tool : undefined;
   const { theme, toggleTheme } = useTheme();
 
   // Fetch the playground chunk once the landing page is idle, so the hero CTA
@@ -41,8 +42,8 @@ export function App() {
   // The fallback matches the shell prerendered into /playground's HTML, so the
   // header and about text stay put while the editor chunk loads.
   return (
-    <Suspense fallback={<PlaygroundShell theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} />}>
-      <Playground theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} />
+    <Suspense fallback={<PlaygroundShell theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} tool={tool} />}>
+      <Playground theme={theme} onToggleTheme={toggleTheme} isEmbed={isEmbed} tool={tool} />
     </Suspense>
   );
 }
