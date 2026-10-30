@@ -57,9 +57,11 @@ import {
   defaultExample,
   exampleMatchesProject,
   examples,
-  projectForExample
+  projectForExample,
+  toolExamples
 } from "./lib/examples";
 import { gistHash, gistIdFrom, loadGistProject, readGistHash } from "./lib/gist";
+import { TOOL_PATHS, type ToolPage } from "./lib/routes";
 import { onLuauAnalysisReady, warmLuauAnalysis } from "./lib/luauAnalysis";
 import { dumpLuauBytecode, optimizeHotComment, parseBytecodeListing } from "./lib/luauBytecode";
 import {
@@ -260,17 +262,18 @@ const lightEditorTheme = [
  * the field data reports. Visitors with neither a hash nor a draft have
  * nothing to swap in, so they skip the wait and keep their current LCP.
  */
-function hasPendingRestore(isEmbed: boolean): boolean {
+function hasPendingRestore(keepsDraft: boolean): boolean {
   if (window.location.hash.length > 1) return true;
-  return !isEmbed && hasStoredDraftHint();
+  return keepsDraft && hasStoredDraftHint();
 }
 
-function defaultWorkspace(): Workspace {
-  const project = projectForExample(defaultExample);
+function defaultWorkspace(tool?: ToolPage): Workspace {
+  const example = tool ? toolExamples[tool] : defaultExample;
+  const project = projectForExample(example);
   return {
     project,
     activeFile: project.entry,
-    stdin: "stdin" in defaultExample ? defaultExample.stdin ?? "" : ""
+    stdin: "stdin" in example ? example.stdin ?? "" : ""
   };
 }
 
@@ -312,10 +315,14 @@ interface PlaygroundProps {
   theme: Theme;
   onToggleTheme: () => void;
   isEmbed: boolean;
+  tool?: ToolPage;
 }
 
-export default function Playground({ theme, onToggleTheme, isEmbed }: PlaygroundProps) {
-  const [workspace, setWorkspace] = useState<Workspace>(defaultWorkspace);
+export default function Playground({ theme, onToggleTheme, isEmbed, tool }: PlaygroundProps) {
+  // Tool pages always open on their demo and never touch the draft, so a quick
+  // format or check can't overwrite what the visitor left in /playground.
+  const keepsDraft = !isEmbed && !tool;
+  const [workspace, setWorkspace] = useState<Workspace>(() => defaultWorkspace(tool));
   const [projects, setProjects] = useState<StoredWorkspaceProject[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -328,7 +335,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const [isHydrated, setIsHydrated] = useState(false);
   // Constant for the life of the mount: the answer cannot change once the
   // hash is read and restore() is in flight.
-  const [restorePending] = useState(() => hasPendingRestore(isEmbed));
+  const [restorePending] = useState(() => hasPendingRestore(keepsDraft));
   const [notice, setNotice] = useState<string | null>(null);
   const [copiedInput, setCopiedInput] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
@@ -398,7 +405,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
         const gistId = readGistHash(window.location.hash);
         const [shared, draft, savedProjects] = await Promise.all([
           gistId ? readGist(gistId) : readProjectShareHash(window.location.hash),
-          isEmbed ? null : workspaceStore.getDraft(),
+          keepsDraft ? workspaceStore.getDraft() : null,
           isEmbed ? ([] as StoredWorkspaceProject[]) : workspaceStore.listProjects()
         ]);
 
@@ -423,10 +430,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     return () => {
       cancelled = true;
     };
-  }, [isEmbed]);
+  }, [isEmbed, keepsDraft]);
 
   useEffect(() => {
-    if (!isHydrated || isEmbed) return;
+    if (!isHydrated || !keepsDraft) return;
     if (skipNextAutosave.current) {
       skipNextAutosave.current = false;
       return;
@@ -437,7 +444,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     }, 450);
 
     return () => window.clearTimeout(timer);
-  }, [isEmbed, isHydrated, workspace]);
+  }, [keepsDraft, isHydrated, workspace]);
 
   const activeCode = workspace.project.files[workspace.activeFile] ?? "";
   /** Hold back content whose size a pending restore would change. */
@@ -914,11 +921,11 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
 
   const reset = async () => {
     skipNextAutosave.current = true;
-    setWorkspace(defaultWorkspace());
+    setWorkspace(defaultWorkspace(tool));
     setResult(null);
     setNotice(null);
-    window.history.replaceState(null, "", "/playground");
-    if (!isEmbed) await workspaceStore.clearDraft();
+    window.history.replaceState(null, "", tool ? `/${TOOL_PATHS[tool]}` : "/playground");
+    if (keepsDraft) await workspaceStore.clearDraft();
   };
 
   const newProject = () => {
@@ -1127,7 +1134,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const isLuau = workspace.project.flavor === "luau";
 
   return (
-    <PlaygroundShell theme={theme} onToggleTheme={onToggleTheme} isEmbed={isEmbed}>
+    <PlaygroundShell theme={theme} onToggleTheme={onToggleTheme} isEmbed={isEmbed} tool={tool}>
       <main className={`workspace${layout}`}>
         {compact ? (
           <div className="compact-top">

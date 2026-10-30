@@ -6,7 +6,7 @@
 import { Analysis } from "@luau-rs/luau/analysis";
 import { describe, expect, it } from "vitest";
 import { mergeDiagnostics } from "../lib/diagnostics";
-import { examples, projectForExample } from "../lib/examples";
+import { examples, projectForExample, toolExamples } from "../lib/examples";
 import type { Diagnostic, ProjectPayload } from "../lib/types";
 import {
   handleAnalysisRequest,
@@ -203,6 +203,15 @@ describe("LuauAnalysisSession diagnostics", () => {
       const errors = errorsOnly(session.check(Object.keys(project.files)));
       expect({ example: example.id, errors: messages(errors) }).toEqual({ example: example.id, errors: [] });
     }
+  });
+
+  it("flags exactly the one mistake in the type checker page's demo", async () => {
+    const project = projectForExample(toolExamples["type-checker"]);
+    const session = await createSession();
+    session.sync(project, "strict");
+    const errors = errorsOnly(session.check(["main.luau"]));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].line).toBe(project.files["main.luau"].split("\n").findIndex((line) => line.includes('"80"')) + 1);
   });
 
   it("flags the call the typed modules example invites readers to uncomment", async () => {

@@ -18,6 +18,12 @@ describe("app routes", () => {
     expect(getAppRoute("/playground", "").mode).toBe("playground");
   });
 
+  it("opens the tool pages on the playground", () => {
+    expect(getAppRoute("/lua-formatter", "")).toEqual({ mode: "playground", tool: "formatter" });
+    expect(getAppRoute("/luau-type-checker", "#c=1Labc")).toEqual({ mode: "playground", tool: "type-checker" });
+    expect(getAppRoute("/playground", "")).toEqual({ mode: "playground" });
+  });
+
   it("resolves embed routes", () => {
     expect(getAppRoute("/embed", "")).toEqual({ mode: "embed" });
     expect(getAppRoute("/embed/anything", "")).toEqual({ mode: "embed" });

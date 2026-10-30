@@ -1,7 +1,8 @@
 // Post-build SEO pass:
 //  1. Prerenders the landing page into dist/index.html so crawlers that don't
 //     execute JS still see the full marketing content.
-//  2. Emits dist/playground/index.html and dist/embed/index.html with
+//  2. Emits dist/playground/index.html, the tool pages (dist/lua-formatter/,
+//     dist/luau-type-checker/), and dist/embed/index.html with
 //     route-specific <title>/description/canonical tags (nginx's
 //     `try_files $uri $uri/index.html` picks them up), instead of every route claiming
 //     to be the homepage. The embed route is marked noindex. The playground
@@ -93,14 +94,23 @@ const server = await createServer({
 
 let landingMarkup;
 let playgroundMarkup;
+let formatterMarkup;
+let typeCheckerMarkup;
 try {
   const { renderLanding, renderPlaygroundShell } = await server.ssrLoadModule("/src/entry-prerender.tsx");
   landingMarkup = renderLanding();
   playgroundMarkup = renderPlaygroundShell();
+  formatterMarkup = renderPlaygroundShell("formatter");
+  typeCheckerMarkup = renderPlaygroundShell("type-checker");
 } finally {
   await server.close();
 }
-for (const [label, markup] of [["landing", landingMarkup], ["playground", playgroundMarkup]]) {
+for (const [label, markup] of [
+  ["landing", landingMarkup],
+  ["playground", playgroundMarkup],
+  ["formatter", formatterMarkup],
+  ["type checker", typeCheckerMarkup]
+]) {
   if (!markup.includes("<h1")) {
     throw new Error(`postbuild: prerendered ${label} markup is missing its <h1>`);
   }
@@ -115,6 +125,25 @@ const routes = [
     canonical: "https://weblua.com/playground",
     noindex: false,
     markup: playgroundMarkup
+  },
+  {
+    // Must match TOOL_PATHS in src/lib/routes.ts.
+    dir: "lua-formatter",
+    title: "Lua &amp; Luau Formatter Online (StyLua) — Weblua",
+    description:
+      "Format Lua 5.1–5.5 and Luau code online with StyLua, in your browser. Paste code, press Format, and copy the result. Free, with no install or account.",
+    canonical: "https://weblua.com/lua-formatter",
+    noindex: false,
+    markup: formatterMarkup
+  },
+  {
+    dir: "luau-type-checker",
+    title: "Luau Type Checker Online — Strict Mode in Your Browser | Weblua",
+    description:
+      "Type-check Luau code online in strict or nonstrict mode. Errors appear as you type, with hover details and types that cross require. Free, no Roblox Studio needed.",
+    canonical: "https://weblua.com/luau-type-checker",
+    noindex: false,
+    markup: typeCheckerMarkup
   },
   {
     dir: "embed",

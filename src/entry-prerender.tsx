@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { Landing } from "./components/Landing";
 import { PlaygroundShell } from "./components/PlaygroundShell";
+import type { ToolPage } from "./lib/routes";
 
 /**
  * Build-time entry used by scripts/postbuild.mjs to bake the landing page
@@ -13,8 +14,9 @@ export function renderLanding(): string {
 
 /**
  * The playground's header, <h1>, and about text around an empty workspace,
- * for dist/playground/index.html. The editor itself only renders client-side.
+ * for dist/playground/index.html, or a tool page's for dist/<tool path>/index.html.
+ * The editor itself only renders client-side.
  */
-export function renderPlaygroundShell(): string {
-  return renderToStaticMarkup(<PlaygroundShell theme="dark" onToggleTheme={() => {}} isEmbed={false} />);
+export function renderPlaygroundShell(tool?: ToolPage): string {
+  return renderToStaticMarkup(<PlaygroundShell theme="dark" onToggleTheme={() => {}} isEmbed={false} tool={tool} />);
 }

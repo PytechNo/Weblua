@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import * as stylua from "@johnnymorganz/stylua/web";
 import { beforeAll, describe, expect, it } from "vitest";
+import { toolExamples } from "./examples";
 import { formatWith, minimalChange } from "./formatter";
 
 beforeAll(async () => {
@@ -24,6 +25,14 @@ describe("formatter", () => {
       ok: true,
       code: "type Point = { x: number }\nlocal p: Point = { x = 1 }\nlocal s = `x is {p.x}`\np.x += 1\n"
     });
+  });
+
+  it("gives the formatter page's demo something to tidy", () => {
+    const demo = toolExamples.formatter;
+    if (!("code" in demo)) throw new Error("the formatter demo is a snippet");
+    const result = formatWith(stylua, demo.code, demo.flavor);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.code).not.toBe(`${demo.code}\n`);
   });
 
   it("reports parse failures in one line, with a hint for Lua 5.5", () => {

@@ -1,6 +1,14 @@
+/** Playground routes that open on one tool, each with its own prerendered page text. */
+export type ToolPage = "formatter" | "type-checker";
+
+export const TOOL_PATHS: Record<ToolPage, string> = {
+  formatter: "lua-formatter",
+  "type-checker": "luau-type-checker"
+};
+
 export type AppRoute =
   | { mode: "landing" }
-  | { mode: "playground" }
+  | { mode: "playground"; tool?: ToolPage }
   | { mode: "embed" };
 
 export function getAppRoute(
@@ -21,5 +29,6 @@ export function getAppRoute(
     return params.has("share") || params.has("c") ? { mode: "playground" } : { mode: "landing" };
   }
 
-  return { mode: "playground" };
+  const tool = (Object.keys(TOOL_PATHS) as ToolPage[]).find((page) => TOOL_PATHS[page] === parts[0]);
+  return tool ? { mode: "playground", tool } : { mode: "playground" };
 }
