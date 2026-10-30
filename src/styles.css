@@ -2339,6 +2339,35 @@ body[data-theme="light"] .proof-logos li {
   outline: none;
 }
 
+.output-header .input-button {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* A narrow output pane keeps only the icon, so the Luau Output / Bytecode
+   switch is not overlapped; the label stays as the accessible name. */
+.output-pane {
+  container-type: inline-size;
+}
+
+@container (max-width: 380px) {
+  .output-header .input-button {
+    padding: 0 8px;
+  }
+
+  .input-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+
 .input-toggle {
   transition: transform 160ms ease;
 }
@@ -2823,18 +2852,6 @@ body[data-about-dismissed] .playground-about {
     white-space: normal;
   }
 
-  .button {
-    flex: 1 1 auto;
-  }
-
-  .control {
-    flex-basis: 100%;
-  }
-
-  .project-toolbar-actions .button {
-    flex: 1 1 auto;
-  }
-
   .project-library-actions .button {
     flex: 1 1 auto;
   }
@@ -2847,6 +2864,313 @@ body[data-about-dismissed] .playground-about {
 
   .playground-about {
     padding-inline: 12px;
+  }
+}
+
+/* ==========================================================================
+   Compact layout: phones and every embed. Playground.tsx picks it with
+   COMPACT_QUERY. Below 640px wide, code and output become tabs (.is-tabbed),
+   or stack in a tall embed (.is-stacked).
+   ========================================================================== */
+
+.workspace.is-compact {
+  gap: 8px;
+  padding: 8px;
+}
+
+/* A definite height, so the panes fill the screen and CodeMirror scrolls
+   inside them. The floor keeps a usable editor on a landscape phone. */
+.app-header + .workspace.is-compact {
+  height: max(440px, calc(100svh - 60px));
+}
+
+.app-embed .workspace.is-compact {
+  height: 100svh;
+  padding: 6px;
+  gap: 6px;
+}
+
+.compact-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compact-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.compact-runtime {
+  flex: 0 1 150px;
+  min-width: 0;
+  display: flex;
+}
+
+.compact-runtime select,
+.compact-menu select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 28px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.compact-menu-button {
+  margin-left: auto;
+}
+
+.embed-brand {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.embed-brand > svg:last-child {
+  color: var(--muted);
+}
+
+.compact-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.compact-tabs button {
+  flex: 1 1 0;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.is-compact .panes {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.is-tabbed .panes,
+.is-stacked .panes {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.is-stacked .panes {
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.is-tabbed .panes.phone-show-output .editor-pane,
+.is-tabbed .panes:not(.phone-show-output) .output-pane {
+  display: none;
+}
+
+/* Only for projects with more than one file; replaces the desktop file list. */
+.file-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.file-tabs .file-item {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+/* A bottom sheet on phones; a centered card where there is width for one. */
+.compact-menu {
+  width: 100%;
+  max-width: none;
+  max-height: min(88svh, 760px);
+  margin: auto 0 0;
+  padding: 0 0 8px;
+  border: 1px solid var(--border-strong);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-pop);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.compact-menu[open] {
+  animation: sheet-in 200ms ease;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+.compact-menu::backdrop {
+  background: rgba(5, 8, 20, 0.5);
+}
+
+@media (min-width: 641px) {
+  .compact-menu {
+    width: min(460px, calc(100% - 24px));
+    max-height: calc(100% - 24px);
+    margin: auto;
+    border-bottom: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+  }
+}
+
+.compact-menu-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 15px;
+}
+
+.compact-menu section {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px 14px;
+}
+
+.compact-menu section + section {
+  border-top: 1px solid var(--border);
+}
+
+.compact-menu h2 {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+/* File names go into some labels, so these wrap instead of overflowing. */
+.compact-menu .button {
+  min-width: 0;
+  height: auto;
+  min-height: 40px;
+  padding-block: 8px;
+  justify-content: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.compact-menu .button svg {
+  flex: 0 0 auto;
+}
+
+.menu-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.menu-field select {
+  width: auto;
+  min-width: 140px;
+}
+
+/* Each run replaces the output anyway, and in tabs the tab already names the
+   pane; the run timing and the Luau Output / Bytecode switch need the room. */
+.is-compact .output-clear,
+.is-tabbed .output-header strong {
+  display: none;
+}
+
+/* Room for the runtime's version: "Lua" alone would hide which Lua. */
+@media (max-width: 400px) {
+  .embed-brand > :not(:first-child) {
+    display: none;
+  }
+}
+
+/* Touch targets: 44px, per WCAG 2.5.5. */
+@media (pointer: coarse) {
+  .button,
+  .icon-button,
+  .compact-runtime select,
+  .compact-menu select,
+  .control select,
+  .type-mode select,
+  .bytecode-options select,
+  .output-header .input-button {
+    height: 44px;
+  }
+
+  .icon-button {
+    width: 44px;
+  }
+
+  .pane-header {
+    height: 54px;
+  }
+
+  .output-header {
+    height: auto;
+    min-height: 54px;
+    padding-block: 5px;
+  }
+
+  .output-tabs button {
+    height: 40px;
+  }
+
+  .file-explorer-header {
+    height: 52px;
+  }
+
+  .file-item,
+  .file-action,
+  .compact-menu .button {
+    min-height: 44px;
+  }
+
+  .playground-about h2 {
+    padding-right: 52px;
   }
 }
 

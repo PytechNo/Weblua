@@ -305,6 +305,77 @@ Sources: [Search Console anonymized queries](https://support.google.com/webmaste
 
 ---
 
+### 10. Mobile usability
+
+Review on 2026-10-30 at 390 × 844 and 375 × 667 viewport sizes. At 390 × 844,
+the code area started 482 pixels down the screen; in Luau mode, the Types
+selector pushed Format and Copy outside the visible editor header. These were
+viewport checks, not tests of a real phone's keyboard or touch selection.
+
+Work through the following in priority order:
+
+- [x] **Fix clipped Luau controls**: keep Types, Format, and Copy accessible at
+  phone widths, including with long file names. Move secondary actions into a
+  menu or let the editor header wrap.
+  Done: the compact layout (below) has no editor header; Types, Format, and Copy
+  live in its menu with full labels.
+- [x] **Give the editor more screen space**: use Editor / Output tabs on phones,
+  put Files in a collapsible drawer, and keep only essential actions in the main
+  toolbar. Move example/runtime selection and secondary project actions into
+  compact controls so editing does not start halfway down the screen.
+  Done, as a separate compact layout for phones (up to 640 px wide, or 880 × 500
+  in landscape) and every embed: one bar with the runtime, a menu button, and
+  Run; Code / Output (/ Bytecode) tabs below 640 px; file tabs only when a project
+  has several files. Everything else is in a menu sheet (a native `<dialog>`)
+  grouped as Example, Code, Files, Share, and Projects, with full labels and a
+  confirmation before Delete and Start over. Code starts ~190 px down at 390 × 844
+  (was 482).
+- [x] **Keep Run/Stop and results within reach**: make Run/Stop accessible while
+  editing and scrolling, including with the on-screen keyboard open. Show an
+  obvious result/error indicator and a way to jump to Output after running,
+  without having to scroll below the editor to discover the result.
+  Done: Run/Stop sits in the sticky compact bar, Run and Check switch to the
+  Output tab, and that tab carries the status dot. The viewport meta sets
+  `interactive-widget=resizes-content` so Android shrinks the layout for the
+  keyboard; iOS keyboard behavior is unverified (see the real-device item).
+- [x] **Enlarge touch targets**: most buttons are currently 36 pixels tall and
+  file actions are 28 pixels. Aim for 44–48 CSS pixels with comfortable spacing,
+  including icon buttons, file actions, and Output / Bytecode controls. See
+  [W3C's enhanced target-size guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced).
+  Done: 44 px under `(pointer: coarse)`, so touch tablets get it too; mouse
+  layouts are unchanged.
+- [ ] **Add mobile editing controls**: visible Undo, Redo, Indent, Outdent, and
+  common punctuation shortcuts; adjustable editor text size and a line-wrap
+  option. The current editor text is 13.5 pixels.
+- [ ] **Make tools discoverable by touch**: replace the input "+" with a labeled
+  Input button, make icon explanations available without hovering, and make
+  error messages tappable to open the relevant file and jump to the line/column.
+  Partly done: the Input button is labeled (icon only when the output pane is
+  under 380 px), and the compact menu labels every action. Tappable errors are
+  still open.
+- [ ] **Show save status and support recovery**: display Saving / Saved locally
+  and failures, and offer Undo after resetting the workspace or deleting a file.
+- [x] **Use native mobile sharing**: offer the phone's share sheet where supported
+  while retaining Copy link and a usable fallback when clipboard access fails.
+  Done: on touch devices with `navigator.share` the button reads "Share link" and
+  opens the sheet (which has its own Copy). If the clipboard refuses, the notice
+  points to the address bar, which already holds the link.
+- [x] **Embeds at any size**: embeds always use the compact layout, with a
+  "Weblua ↗" link that opens the current code in the full playground. Code and
+  output sit side by side from 640 px wide, stack in narrow embeds at least
+  560 px tall (the homepage hero), and become tabs in narrow, short ones.
+  Checked at 320 × 300, 534 × 680, 700 × 360, and 960 × 220.
+- [ ] **Validate on real iPhone and Android devices**: check keyboard opening and
+  dismissal, Run/Stop access, caret visibility, touch selection, autocomplete,
+  scrolling, and portrait/landscape transitions. Viewport screenshots alone do
+  not verify these behaviors.
+- [ ] **Later: reliable offline reopening**: add a service worker and cache the
+  app and required runtime assets so a previously loaded project can reopen and
+  run offline. The manifest and icons already exist; keep the current offline
+  limitations clear until offline startup is implemented and verified.
+
+---
+
 ### Deferred — needs a product decision first
 - **Standalone-runtime namespace (Lute)**: `fs`, `serde`, and a `@lute/*`/`@std/*`
   veneer only serve standalone-runtime users; Roblox has no `fs`. If pursued, target
