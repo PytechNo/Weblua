@@ -9,9 +9,12 @@ import {
   Code2,
   Copy,
   Download,
+  ExternalLink,
   FilePlus2,
   FolderOpen,
+  Keyboard,
   Link,
+  Menu,
   Pencil,
   Play,
   Plus,
@@ -25,8 +28,17 @@ import {
   WandSparkles,
   X
 } from "lucide-react";
-import { type ChangeEvent, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GitHubMark } from "./components/Brand";
+import {
+  type ChangeEvent,
+  type UIEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from "react";
+import { GitHubMark, MoonMark } from "./components/Brand";
 import { PlaygroundShell } from "./components/PlaygroundShell";
 import { SwapLabel } from "./components/SwapLabel";
 import { luaSupport, refreshLuaContext } from "./lang/lua";
@@ -104,6 +116,25 @@ const typeModeOptions: Array<{ value: LuauTypeMode; label: string }> = [
 ];
 
 const compilerLevels: CompilerLevel[] = [0, 1, 2];
+
+/** Phones in either orientation; embeds are always compact. Keep in step with styles.css. */
+const COMPACT_QUERY = "(max-width: 640px), (max-width: 880px) and (max-height: 500px)";
+/** Too narrow for code and output side by side. */
+const NARROW_QUERY = "(max-width: 640px)";
+/** Tall enough to stack code over output, as a narrow embed (the homepage hero) does. */
+const TALL_QUERY = "(min-height: 560px)";
+
+function useMediaQuery(query: string): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const media = window.matchMedia?.(query);
+      media?.addEventListener("change", onChange);
+      return () => media?.removeEventListener("change", onChange);
+    },
+    [query]
+  );
+  return useSyncExternalStore(subscribe, () => window.matchMedia?.(query).matches ?? false);
+}
 
 /** Pause after the last keystroke before the open file is recompiled. */
 const BYTECODE_DELAY_MS = 250;
@@ -304,6 +335,19 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const [inputOpen, setInputOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [outputTab, setOutputTab] = useState<OutputTab>("output");
+  // Phones and embeds get the compact layout: one slim bar, everything else in a menu.
+  // Below 640px it also shows one pane at a time, picked by phonePane.
+  const compact = useMediaQuery(COMPACT_QUERY) || isEmbed;
+  const narrow = useMediaQuery(NARROW_QUERY);
+  const tall = useMediaQuery(TALL_QUERY);
+  // Phones keep tabs even when tall: with the keyboard open, a stacked editor would be a sliver.
+  const layout = !compact ? "" : !narrow ? " is-compact" : isEmbed && tall ? " is-compact is-stacked" : " is-compact is-tabbed";
+  const tabbed = layout.endsWith("is-tabbed");
+  const [phonePane, setPhonePane] = useState<"editor" | "output">("editor");
+  const menuRef = useRef<HTMLDialogElement>(null);
+  const [openInWebluaUrl, setOpenInWebluaUrl] = useState("/playground");
+  // Touch devices get the system share sheet, which has its own Copy action.
+  const [nativeShare] = useState(() => !!navigator.share && window.matchMedia("(pointer: coarse)").matches);
   const [bytecodeOptions, setBytecodeOptions] = useState<BytecodeOptions>(readBytecodeOptions);
   /** The open file's listing. Null until the compiler first answers. */
   const [bytecode, setBytecode] = useState<BytecodeState | null>(null);
@@ -415,6 +459,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
     setIsRunning(true);
     setNotice(null);
     setOutputTab("output");
+    setPhonePane("output");
 
     try {
       // Output is accumulated outside state: several worker messages can
@@ -468,10 +513,23 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   // A worker outlives the component that started it unless it is terminated.
   useEffect(() => () => runRef.current?.stop(), []);
 
+  // A plain link rather than window.open after an await, which Safari treats as a popup.
+  useEffect(() => {
+    if (!isEmbed) return;
+    const timer = window.setTimeout(() => {
+      tryBuildProjectShareUrl(workspace.project).then(
+        (url) => setOpenInWebluaUrl(url ?? "/playground"),
+        () => setOpenInWebluaUrl("/playground")
+      );
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [isEmbed, workspace.project]);
+
   const runCheck = useCallback(async () => {
     setIsChecking(true);
     setNotice(null);
     setOutputTab("output");
+    setPhonePane("output");
 
     try {
       const isLuau = workspace.project.flavor === "luau";
@@ -786,13 +844,27 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
       return;
     }
 
+    // In the address bar first, so the link can still be copied from there if the clipboard refuses.
+    window.history.replaceState(null, "", new URL(shareUrl).hash);
+    if (nativeShare) {
+      try {
+        await navigator.share({ title: "Weblua project", url: shareUrl });
+        trackEvent("copy_share", { flavor: workspace.project.flavor });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
     try {
       await navigator.clipboard.writeText(shareUrl);
-      window.history.replaceState(null, "", new URL(shareUrl).hash);
       setNotice("Share link copied. Input stays local to this browser.");
       trackEvent("copy_share", { flavor: workspace.project.flavor });
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not copy the share link.");
+    } catch {
+      setNotice(
+        isEmbed
+          ? "Could not copy the share link."
+          : "Could not copy the link. It is in the address bar; copy it from there."
+      );
     }
   };
 
@@ -978,34 +1050,145 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
   const filePaths = Object.keys(workspace.project.files);
   const activeNamedProject = projects.find((project) => project.id === workspace.activeProjectId);
 
+  // Shared by the desktop toolbar and the compact bar and menu; only one layout renders.
+  const runButton = (
+    <button
+      className={isRunning ? "button button-primary is-running" : "button button-primary"}
+      type="button"
+      onClick={isRunning ? stopRun : execute}
+      title={
+        isRunning
+          ? "Stop this run and keep its output (Esc)"
+          : "Run the project (Ctrl+Enter)"
+      }
+    >
+      {isRunning ? <Square size={13} /> : <Play size={16} />}
+      <SwapLabel widest="Stop">{isRunning ? "Stop" : "Run"}</SwapLabel>
+      <kbd className="run-kbd" aria-hidden="true">
+        <SwapLabel widest="Ctrl ↵">{isRunning ? "Esc" : "Ctrl ↵"}</SwapLabel>
+      </kbd>
+    </button>
+  );
+
+  const runtimeSelect = (
+    <select
+      value={workspace.project.flavor}
+      onChange={(event) => updateRuntime(event.target.value as RuntimeFlavor)}
+    >
+      {runtimeOptions.map((runtime) => (
+        <option key={runtime.value} value={runtime.value}>
+          {runtime.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const exampleOptions = (
+    <>
+      <option value="custom">Custom project</option>
+      {examples.map((example) => (
+        <option key={example.id} value={example.id}>
+          {example.title}
+        </option>
+      ))}
+    </>
+  );
+
+  const typeModeSelect = (
+    <select value={typeMode} onChange={(event) => setTypeMode(event.target.value as LuauTypeMode)}>
+      {typeModeOptions.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const projectLibrary = !isEmbed && libraryOpen && (
+    <ProjectLibrary
+      projects={projects}
+      activeProjectId={workspace.activeProjectId}
+      onClose={() => setLibraryOpen(false)}
+      onNew={newProject}
+      onOpenGist={() => void openGist()}
+      onOpen={openProject}
+      onRename={() => void renameCurrentProject()}
+      onDelete={() => void deleteCurrentProject()}
+      activeName={activeNamedProject?.name}
+    />
+  );
+
+  const closeMenu = () => menuRef.current?.close();
+  /** Closes the menu first, so prompts and the file picker open over the editor, not the sheet. */
+  const fromMenu = (action: () => unknown) => () => {
+    closeMenu();
+    void action();
+  };
+  const isLuau = workspace.project.flavor === "luau";
+
   return (
     <PlaygroundShell theme={theme} onToggleTheme={onToggleTheme} isEmbed={isEmbed}>
-      <main className="workspace">
+      <main className={`workspace${layout}`}>
+        {compact ? (
+          <div className="compact-top">
+            <div className="compact-bar" aria-label="Playground controls">
+              {isEmbed && (
+                <a className="embed-brand" href={openInWebluaUrl} target="_blank" rel="noopener" title="Open this project in Weblua">
+                  <MoonMark size={20} />
+                  <span>Weblua</span>
+                  <ExternalLink size={13} aria-hidden="true" />
+                </a>
+              )}
+              <label className="compact-runtime">
+                <span className="visually-hidden">Runtime</span>
+                {runtimeSelect}
+              </label>
+              <button className="icon-button text-icon compact-menu-button" type="button" onClick={() => menuRef.current?.showModal()} aria-haspopup="dialog" title="Menu" aria-label="Menu">
+                <Menu size={19} />
+              </button>
+              {runButton}
+            </div>
+            {tabbed && (
+              <span className="output-tabs compact-tabs" role="group" aria-label="Show">
+                <button type="button" aria-pressed={phonePane === "editor"} onClick={() => setPhonePane("editor")}>Code</button>
+                <button
+                  type="button"
+                  aria-pressed={phonePane === "output" && !showBytecode}
+                  onClick={() => {
+                    setPhonePane("output");
+                    setOutputTab("output");
+                  }}
+                >
+                  Output <span className={`status-dot status-${statusKind}`} aria-hidden="true" />
+                </button>
+                {isLuau && (
+                  <button
+                    type="button"
+                    aria-pressed={phonePane === "output" && showBytecode}
+                    onClick={() => {
+                      setPhonePane("output");
+                      openBytecode();
+                    }}
+                  >
+                    Bytecode
+                  </button>
+                )}
+              </span>
+            )}
+            {projectLibrary}
+          </div>
+        ) : (
         <div className="toolbar" aria-label="Playground controls">
           <label className="control">
             <span>Example</span>
             <select value={selectedExample} onChange={(event) => loadExample(event.target.value)}>
-              <option value="custom">Custom project</option>
-              {examples.map((example) => (
-                <option key={example.id} value={example.id}>
-                  {example.title}
-                </option>
-              ))}
+              {exampleOptions}
             </select>
           </label>
 
           <label className="control">
             <span>Runtime</span>
-            <select
-              value={workspace.project.flavor}
-              onChange={(event) => updateRuntime(event.target.value as RuntimeFlavor)}
-            >
-              {runtimeOptions.map((runtime) => (
-                <option key={runtime.value} value={runtime.value}>
-                  {runtime.label}
-                </option>
-              ))}
-            </select>
+            {runtimeSelect}
           </label>
 
           {!isEmbed && (
@@ -1030,33 +1213,11 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
               <button className="icon-button text-icon" type="button" onClick={() => importRef.current?.click()} title="Import project" aria-label="Import project">
                 <Upload size={16} />
               </button>
-              <input
-                ref={importRef}
-                className="visually-hidden"
-                type="file"
-                accept={`application/json,${PROJECT_EXPORT_EXTENSION}`}
-                onChange={importProject}
-              />
             </div>
           )}
 
           <div className="toolbar-actions">
-            <button
-              className={isRunning ? "button button-primary is-running" : "button button-primary"}
-              type="button"
-              onClick={isRunning ? stopRun : execute}
-              title={
-                isRunning
-                  ? "Stop this run and keep its output (Esc)"
-                  : "Run the project (Ctrl+Enter)"
-              }
-            >
-              {isRunning ? <Square size={13} /> : <Play size={16} />}
-              <SwapLabel widest="Stop">{isRunning ? "Stop" : "Run"}</SwapLabel>
-              <kbd className="run-kbd" aria-hidden="true">
-                <SwapLabel widest="Ctrl ↵">{isRunning ? "Esc" : "Ctrl ↵"}</SwapLabel>
-              </kbd>
-            </button>
+            {runButton}
             <button
               className={longRuns ? "button button-toggle is-on" : "button button-toggle"}
               type="button"
@@ -1083,7 +1244,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
             </button>
             <button className="button" type="button" onClick={copyShareLink}>
               <Link size={16} />
-              Copy link
+              {nativeShare ? "Share link" : "Copy link"}
             </button>
             {!isEmbed && (
               <>
@@ -1097,42 +1258,53 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
             )}
           </div>
 
-          {!isEmbed && libraryOpen && (
-            <ProjectLibrary
-              projects={projects}
-              activeProjectId={workspace.activeProjectId}
-              onClose={() => setLibraryOpen(false)}
-              onNew={newProject}
-              onOpenGist={() => void openGist()}
-              onOpen={openProject}
-              onRename={() => void renameCurrentProject()}
-              onDelete={() => void deleteCurrentProject()}
-              activeName={activeNamedProject?.name}
-            />
-          )}
+          {projectLibrary}
         </div>
+        )}
 
         {notice && <div className="notice" role="status">{notice}</div>}
 
-        <div className="panes">
+        {!isEmbed && (
+          <input
+            ref={importRef}
+            className="visually-hidden"
+            type="file"
+            accept={`application/json,${PROJECT_EXPORT_EXTENSION}`}
+            onChange={importProject}
+          />
+        )}
+
+        <div className={phonePane === "output" ? "panes phone-show-output" : "panes"}>
           <section className="editor-pane" aria-label="Project editor">
+            {compact ? (
+              editorReady && filePaths.length > 1 && (
+                <div className="file-tabs" role="group" aria-label="Project files">
+                  {filePaths.map((path) => (
+                    <button
+                      key={path}
+                      className={path === workspace.activeFile ? "file-item is-active" : "file-item"}
+                      type="button"
+                      aria-pressed={path === workspace.activeFile}
+                      onClick={() => updateWorkspace((current) => ({ ...current, activeFile: path }))}
+                    >
+                      <span>{path}</span>
+                      {path === workspace.project.entry && <span className="entry-mark" aria-label="Entry file">Run</span>}
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : (
             <div className="pane-header">
               <span className="window-dots" aria-hidden="true"><i /><i /><i /></span>
               <span className="pane-title">{workspace.activeFile}</span>
               <span className="pane-badge">{runtimeLabel(workspace.project.flavor)}</span>
-              {workspace.project.flavor === "luau" && (
+              {isLuau && (
                 <label
                   className="type-mode"
                   title="Type checking for files without a --!strict, --!nonstrict, or --!nocheck comment"
                 >
                   <span>Types</span>
-                  <select value={typeMode} onChange={(event) => setTypeMode(event.target.value as LuauTypeMode)}>
-                    {typeModeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  {typeModeSelect}
                 </label>
               )}
               <button className="icon-button text-icon" type="button" onClick={() => void formatActiveFile()} disabled={isFormatting || !editorReady} title="Format file (Shift+Alt+F)" aria-label="Format file">
@@ -1142,7 +1314,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
                 {copiedInput ? <Check size={16} /> : <Copy size={16} />}
               </button>
             </div>
+            )}
             <div className="editor-workbench">
+              {!compact && (
               <nav className="file-explorer" aria-label="Project files">
                 <div className="file-explorer-header">
                   <span>Files</span>
@@ -1168,6 +1342,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
                   <button className="file-action danger" type="button" onClick={deleteActiveFile} disabled={workspace.activeFile === workspace.project.entry || filePaths.length === 1}><Trash2 size={14} /> Delete</button>
                 </div>
               </nav>
+              )}
               <div className="editor-host">
                 {editorReady ? (
                   <CodeMirror
@@ -1190,13 +1365,14 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
             <div className="output-header">
               <span className={`status-dot status-${statusKind}`} aria-hidden="true" />
               <div>
-                {workspace.project.flavor === "luau" ? (
+                {/* The tabbed layout has Bytecode as a top-level tab instead. */}
+                {isLuau && !tabbed ? (
                   <span className="output-tabs" role="group" aria-label="Output pane">
                     <button type="button" aria-pressed={!showBytecode} onClick={() => setOutputTab("output")}>Output</button>
                     <button type="button" aria-pressed={showBytecode} onClick={openBytecode} title="The bytecode Luau compiles the open file to">Bytecode</button>
                   </span>
                 ) : (
-                  <strong>Output</strong>
+                  <strong>{showBytecode ? "Bytecode" : "Output"}</strong>
                 )}
                 <span className="output-meta" aria-live="polite">
                   {showBytecode
@@ -1205,8 +1381,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
                 </span>
               </div>
               {!showBytecode && (
-                <button className="icon-button text-icon" type="button" onClick={() => setInputOpen((open) => !open)} title={inputOpen ? "Hide input" : "Show input"} aria-label={inputOpen ? "Hide input" : "Show input"} aria-expanded={inputOpen}>
-                  <Plus className={inputOpen ? "input-toggle is-open" : "input-toggle"} size={16} />
+                <button className="button input-button" type="button" onClick={() => setInputOpen((open) => !open)} title={inputOpen ? "Hide preset input" : "Preset input for read calls"} aria-expanded={inputOpen}>
+                  <Plus className={inputOpen ? "input-toggle is-open" : "input-toggle"} size={15} />
+                  <span className="input-label">Input</span>
                 </button>
               )}
               <button
@@ -1220,7 +1397,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
                 {copiedOutput ? <Check size={16} /> : <Copy size={16} />}
               </button>
               {!showBytecode && (
-                <button className="icon-button text-icon" type="button" onClick={() => setResult(null)} title="Clear output" aria-label="Clear output"><Trash2 size={16} /></button>
+                <button className="icon-button text-icon output-clear" type="button" onClick={() => setResult(null)} title="Clear output" aria-label="Clear output"><Trash2 size={16} /></button>
               )}
             </div>
             {showBytecode ? (
@@ -1288,6 +1465,141 @@ export default function Playground({ theme, onToggleTheme, isEmbed }: Playground
             )}
           </aside>
         </div>
+
+        {compact && (
+          <dialog
+            ref={menuRef}
+            className="compact-menu"
+            aria-labelledby="compact-menu-title"
+            // A click on the dialog itself, not its content, is a click on the backdrop.
+            onClick={(event) => event.target === event.currentTarget && closeMenu()}
+          >
+            <div className="compact-menu-header">
+              <strong id="compact-menu-title">Menu</strong>
+              <button className="icon-button text-icon" type="button" onClick={closeMenu} aria-label="Close menu">
+                <X size={18} />
+              </button>
+            </div>
+
+            <section>
+              <h2>Example</h2>
+              <select
+                aria-label="Example"
+                value={selectedExample}
+                onChange={(event) => {
+                  closeMenu();
+                  loadExample(event.target.value);
+                }}
+              >
+                {exampleOptions}
+              </select>
+            </section>
+
+            <section>
+              <h2>Code</h2>
+              <div className="menu-grid">
+                <button className="button" type="button" onClick={fromMenu(formatActiveFile)} disabled={isFormatting || !editorReady}>
+                  <WandSparkles size={16} /> Format code
+                </button>
+                <button className="button" type="button" onClick={fromMenu(copyInput)}>
+                  <Copy size={16} /> Copy code
+                </button>
+                <button className="button" type="button" onClick={fromMenu(runCheck)} disabled={isChecking}>
+                  <ShieldCheck size={16} /> Check for errors
+                </button>
+                <button
+                  className="button"
+                  type="button"
+                  onClick={fromMenu(() => {
+                    setPhonePane("output");
+                    setOutputTab("output");
+                    setInputOpen(true);
+                  })}
+                >
+                  <Keyboard size={16} /> Program input
+                </button>
+              </div>
+              <button
+                className={longRuns ? "button button-toggle is-on" : "button button-toggle"}
+                type="button"
+                aria-pressed={longRuns}
+                onClick={() => setLongRuns((on) => !on)}
+              >
+                <Timer size={16} /> Time limit per run: {longRuns ? "30 seconds" : "5 seconds"}
+              </button>
+              {isLuau && (
+                <label className="menu-field">
+                  <span>Type checking</span>
+                  {typeModeSelect}
+                </label>
+              )}
+            </section>
+
+            <section>
+              <h2>Files</h2>
+              <div className="menu-grid">
+                <button className="button" type="button" onClick={fromMenu(addFile)}>
+                  <FilePlus2 size={16} /> New file
+                </button>
+                <button className="button" type="button" onClick={fromMenu(renameActiveFile)}>
+                  <Pencil size={16} /> Rename {workspace.activeFile}
+                </button>
+                <button className="button" type="button" onClick={fromMenu(setActiveEntry)} disabled={workspace.activeFile === workspace.project.entry}>
+                  <Play size={16} /> Start runs from {workspace.activeFile}
+                </button>
+                <button
+                  className="button button-danger"
+                  type="button"
+                  onClick={fromMenu(() => window.confirm(`Delete ${workspace.activeFile}?`) && deleteActiveFile())}
+                  disabled={workspace.activeFile === workspace.project.entry || filePaths.length === 1}
+                >
+                  <Trash2 size={16} /> Delete {workspace.activeFile}
+                </button>
+              </div>
+            </section>
+
+            <section>
+              <h2>Share</h2>
+              <div className="menu-grid">
+                <button className="button" type="button" onClick={fromMenu(copyShareLink)}>
+                  <Link size={16} /> {nativeShare ? "Share link" : "Copy link"}
+                </button>
+                {isEmbed ? (
+                  <a className="button" href={openInWebluaUrl} target="_blank" rel="noopener" onClick={closeMenu}>
+                    <ExternalLink size={16} /> Open in Weblua
+                  </a>
+                ) : (
+                  <button className="button" type="button" onClick={fromMenu(copyEmbed)}>
+                    <Code2 size={16} /> Copy embed code
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {!isEmbed && (
+              <section>
+                <h2>Projects</h2>
+                <div className="menu-grid">
+                  <button className="button" type="button" onClick={fromMenu(() => setLibraryOpen(true))}>
+                    <FolderOpen size={16} /> My projects
+                  </button>
+                  <button className="button" type="button" onClick={fromMenu(saveAsProject)}>
+                    <Save size={16} /> Save as project
+                  </button>
+                  <button className="button" type="button" onClick={fromMenu(exportProject)}>
+                    <Download size={16} /> Export to file
+                  </button>
+                  <button className="button" type="button" onClick={fromMenu(() => importRef.current?.click())}>
+                    <Upload size={16} /> Import from file
+                  </button>
+                  <button className="button" type="button" onClick={fromMenu(() => window.confirm("Start over? This clears the current code.") && reset())}>
+                    <RotateCcw size={16} /> Start over
+                  </button>
+                </div>
+              </section>
+            )}
+          </dialog>
+        )}
       </main>
     </PlaygroundShell>
   );
