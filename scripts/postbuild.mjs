@@ -8,9 +8,12 @@
 //     every route claiming to be the homepage. The embed route is marked
 //     noindex. Every other route also gets its prerendered markup: the
 //     playground shell's header, <h1>, and about text, or the whole article.
-//  3. Adds a modulepreload for the lazily-imported chunk each app route needs
-//     (the playground's or the standalone tools'), so splitting it out of the
-//     landing bundle doesn't cost those routes an extra round trip.
+//  3. Adds a modulepreload for the lazily-imported chunks each app route needs
+//     (the playground's, the standalone tools', the articles'), so splitting
+//     them out of the landing bundle doesn't cost those routes a round trip.
+//  4. Gives every article and tool page its own JSON-LD (TechArticle, Course,
+//     LearningResource, WebApplication, FAQPage, BreadcrumbList), and writes
+//     dist/llms.txt, a plain index of those pages for AI crawlers.
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,7 +34,13 @@ function lazyChunk(name) {
   return `/assets/${match}`;
 }
 
-const chunkHrefs = { Playground: lazyChunk("Playground"), Tools: lazyChunk("Tools"), Articles: lazyChunk("Articles") };
+// "articles" (lower case) is the page text that Articles and Tools import; it loads with them.
+const chunkHrefs = {
+  Playground: lazyChunk("Playground"),
+  Tools: lazyChunk("Tools"),
+  Articles: lazyChunk("Articles"),
+  articles: lazyChunk("articles")
+};
 
 /** Text from page data, for an attribute or element. */
 function escapeHtml(text) {
@@ -48,15 +57,14 @@ function replaceOnce(html, pattern, replacement, label) {
   return next;
 }
 
-function routeHtml({ title, description, canonical, noindex, markup, chunk = "Playground" }) {
-  let html = chunk
-    ? replaceOnce(
-        template,
-        "</head>",
-        `  <link rel="modulepreload" crossorigin href="${chunkHrefs[chunk]}" />
-  </head>`,
-        "</head> (modulepreload insert)"
-      )
+function routeHtml({ title, description, canonical, noindex, markup, chunks = ["Playground"], jsonLd }) {
+  const head = [
+    ...chunks.map((chunk) => `<link rel="modulepreload" crossorigin href="${chunkHrefs[chunk]}" />`),
+    // "<" escaped so text in the data can't close the script element.
+    ...(jsonLd ? [`<script type="application/ld+json">${jsonLd.replaceAll("<", "\\u003c")}</script>`] : [])
+  ];
+  let html = head.length
+    ? replaceOnce(template, "</head>", `  ${head.join("\n    ")}\n  </head>`, "</head> (head insert)")
     : template;
   html = replaceOnce(html, /<title>[\s\S]*?<\/title>/, `<title>${title}</title>`, "<title>");
   for (const [pattern, value, label] of [
@@ -102,23 +110,35 @@ const server = await createServer({
 
 let landingMarkup;
 let playgroundMarkup;
-let toolPaths;
-let toolMarkup;
+let tools;
 let articles;
 try {
   const prerender = await server.ssrLoadModule("/src/entry-prerender.tsx");
   landingMarkup = prerender.renderLanding();
   playgroundMarkup = prerender.renderPlaygroundShell();
-  toolPaths = prerender.TOOL_PATHS;
-  toolMarkup = Object.fromEntries(Object.keys(toolPaths).map((tool) => [tool, prerender.renderPlaygroundShell(tool)]));
+  tools = Object.entries(prerender.TOOL_PATHS).map(([tool, dir]) => ({
+    tool,
+    dir,
+    title: prerender.guidePages[tool].metaTitle,
+    description: prerender.guidePages[tool].description,
+    markup: prerender.renderToolPage(tool),
+    jsonLd: prerender.toolSchema(tool)
+  }));
   // Each hub, then each page under it.
   articles = Object.entries(prerender.articleHubs).flatMap(([section, hub]) => [
-    { dir: section, title: hub.metaTitle, description: hub.description, markup: prerender.renderArticle(section) },
+    {
+      dir: section,
+      title: hub.metaTitle,
+      description: hub.description,
+      markup: prerender.renderArticle(section),
+      jsonLd: prerender.articleSchema(section)
+    },
     ...hub.pages.map((page) => ({
       dir: `${section}/${page.slug}`,
       title: page.metaTitle,
       description: page.description,
-      markup: prerender.renderArticle(section, page.slug)
+      markup: prerender.renderArticle(section, page.slug),
+      jsonLd: prerender.articleSchema(section, page.slug)
     }))
   ]);
 } finally {
@@ -127,62 +147,13 @@ try {
 for (const [label, markup] of [
   ["landing", landingMarkup],
   ["playground", playgroundMarkup],
-  ...Object.entries(toolMarkup),
+  ...tools.map((tool) => [tool.dir, tool.markup]),
   ...articles.map((article) => [article.dir, article.markup])
 ]) {
   if (!markup.includes("<h1")) {
     throw new Error(`postbuild: prerendered ${label} markup is missing its <h1>`);
   }
 }
-
-/** Search text for each tool page, keyed like TOOL_PATHS; a missing entry fails the build below. */
-const toolMeta = {
-  formatter: {
-    title: "Lua &amp; Luau Formatter Online (StyLua) — Weblua",
-    description:
-      "Format Lua 5.1–5.5 and Luau code online with StyLua, in your browser. Paste code, press Format, and copy the result. Free, with no install or account."
-  },
-  "type-checker": {
-    title: "Luau Type Checker Online — Strict Mode in Your Browser | Weblua",
-    description:
-      "Type-check Luau code online in strict or nonstrict mode. Errors appear as you type, with hover details and types that cross require. Free, no Roblox Studio needed."
-  },
-  bytecode: {
-    title: "Luau Bytecode Viewer — See What the Compiler Emits | Weblua",
-    description:
-      "View Luau bytecode online. The Luau compiler runs in your browser and lists each instruction under its source line, at optimization levels 0 to 2."
-  },
-  lua: {
-    title: "Lua Playground — Run Lua 5.1 to 5.5 Online | Weblua",
-    description:
-      "A free Lua playground: run Lua 5.1, 5.2, 5.3, 5.4, and 5.5 online with the real interpreters, compare versions side by side, and share code as a link."
-  },
-  luau: {
-    title: "Luau Playground — Run and Type-Check Luau Online | Weblua",
-    description:
-      "A free Luau playground: run Luau online with type checking as you type, string interpolation, generics, and the task library. No Roblox Studio or install."
-  },
-  "lua-vs-luau": {
-    title: "Lua vs Luau — Run Both Side by Side | Weblua",
-    description:
-      "Lua 5.1 vs Luau: run the same code on both and compare the output. See the syntax, library, and behavior differences that matter for Roblox scripts."
-  },
-  "lua51-vs-lua54": {
-    title: "Lua 5.1 vs 5.4 — Run Both Side by Side | Weblua",
-    description:
-      "Lua 5.1 vs Lua 5.4: run the same code on both real interpreters and compare. Integers, table.unpack, _ENV, goto, bitwise operators, and more."
-  },
-  "pattern-tester": {
-    title: "Lua Pattern Tester — Test string.match and gsub Online | Weblua",
-    description:
-      "Test Lua patterns online: see every match, its position, and its captures highlighted, plus string.gsub's result, on Lua 5.1 to 5.5 or Luau."
-  },
-  "table-to-json": {
-    title: "Lua Table to JSON Converter (and JSON to Lua) | Weblua",
-    description:
-      "Convert a Lua table to JSON, or JSON to a Lua table, in your browser. Lua 5.4 evaluates the table, so expressions and nested tables work."
-  }
-};
 
 const routes = [
   {
@@ -194,13 +165,21 @@ const routes = [
     noindex: false,
     markup: playgroundMarkup
   },
-  ...Object.entries(toolPaths).map(([tool, dir]) => ({
-    dir,
-    ...toolMeta[tool],
-    canonical: `https://weblua.com/${dir}`,
+  ...tools.map((tool) => ({
+    dir: tool.dir,
+    title: escapeHtml(tool.title),
+    description: escapeHtml(tool.description),
+    canonical: `https://weblua.com/${tool.dir}`,
     noindex: false,
-    markup: toolMarkup[tool],
-    chunk: tool === "pattern-tester" || tool === "table-to-json" ? "Tools" : "Playground"
+    markup: tool.markup,
+    jsonLd: tool.jsonLd,
+    // Comparison pages are articles; standalone tools render their guide from the articles chunk.
+    chunks:
+      tool.tool === "lua-vs-luau" || tool.tool === "lua51-vs-lua54"
+        ? ["Articles", "articles"]
+        : tool.tool === "pattern-tester" || tool.tool === "table-to-json"
+          ? ["Tools", "Articles", "articles"]
+          : ["Playground"]
   })),
   ...articles.map((article) => ({
     dir: article.dir,
@@ -209,14 +188,16 @@ const routes = [
     canonical: `https://weblua.com/${article.dir}`,
     noindex: false,
     markup: article.markup,
-    chunk: "Articles"
+    jsonLd: article.jsonLd,
+    chunks: ["Articles", "articles"]
   })),
   {
     dir: "embed",
     title: "Weblua Embed — Runnable Lua &amp; Luau Project",
     description: "An interactive source-only Lua 5.1–5.5 and Luau project embed powered by Weblua.",
     canonical: "https://weblua.com/embed",
-    noindex: true
+    noindex: true,
+    chunks: ["Playground"]
   }
 ];
 
@@ -230,6 +211,23 @@ for (const route of routes) {
   writeFileSync(path.join(outDir, "index.html"), routeHtml(route));
   console.log(`postbuild: wrote dist/${route.dir}/index.html`);
 }
+
+// A plain index of the content pages, for AI crawlers that read llms.txt.
+const llmsSection = (heading, entries) =>
+  [`## ${heading}`, "", ...entries.map((entry) => `- [${entry.title.replace(/ [|—] Weblua$/, "")}](https://weblua.com/${entry.dir}): ${entry.description}`), ""].join("\n");
+writeFileSync(
+  path.join(dist, "llms.txt"),
+  [
+    "# Weblua",
+    "",
+    "> Weblua runs Lua 5.1 to 5.5 and Luau in the browser through WebAssembly: a playground, tools, runnable examples, and a free interactive Luau course. Every code output shown on these pages is checked by tests against the real interpreters.",
+    "",
+    llmsSection("Tools and comparisons", tools),
+    llmsSection("Learn Luau", articles.filter((article) => article.dir.startsWith("learn-luau"))),
+    llmsSection("Examples", articles.filter((article) => article.dir.startsWith("examples")))
+  ].join("\n")
+);
+console.log("postbuild: wrote dist/llms.txt");
 
 const prerendered = replaceOnce(
   template,

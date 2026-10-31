@@ -434,7 +434,8 @@ print("table.find:", type(table.find))
 print("math.clamp:", type(math.clamp))
 print("table.unpack:", type(table.unpack))
 
--- Lua 5.1 can compile code at runtime; Luau scripts cannot.
+-- Lua 5.1 compiles code at runtime with loadstring. Luau leaves that to the
+-- app that embeds it, and Weblua's doesn't add it.
 print("loadstring:", type(loadstring))
 
 -- Luau also accepts +=, continue, \`{interpolated}\` strings,

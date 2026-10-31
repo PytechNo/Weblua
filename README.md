@@ -45,19 +45,27 @@ or Studio tooling.
 - Fifteen built-in examples, including a multi-file capability tour, a Luau `task`
   project, and a Luau project whose module exports types to the file that requires it.
 
-Tool pages open the playground on one job: [`/lua-formatter`](https://weblua.com/lua-formatter),
+Tool pages open the playground on one job, with a guide below the editor:
+[`/lua-formatter`](https://weblua.com/lua-formatter),
 [`/luau-type-checker`](https://weblua.com/luau-type-checker),
 [`/luau-bytecode-viewer`](https://weblua.com/luau-bytecode-viewer),
-[`/lua`](https://weblua.com/lua), [`/luau`](https://weblua.com/luau), and the side-by-side
-comparisons [`/lua-vs-luau`](https://weblua.com/lua-vs-luau) and
-[`/lua-5-1-vs-5-4`](https://weblua.com/lua-5-1-vs-5-4). Two small tools have their own
-UI: a [pattern tester](https://weblua.com/lua-pattern-tester) that highlights every
-match and capture on the runtime you pick, and a
-[Lua table to JSON converter](https://weblua.com/lua-table-to-json) that works both ways.
-[`/examples`](https://weblua.com/examples) holds runnable examples with their output on
-Lua 5.1, 5.4, and Luau, and [`/learn-luau`](https://weblua.com/learn-luau) five short
-lessons that end in an exercise checked in the page. Every example's printed output
-and every exercise is pinned by `src/workers/articles.execution.test.ts`.
+[`/lua`](https://weblua.com/lua), and [`/luau`](https://weblua.com/luau). Two small tools
+have their own UI: a [pattern tester](https://weblua.com/lua-pattern-tester) that
+highlights every match and capture on the runtime you pick, with a cheat sheet whose
+examples load into it, and a [Lua table to JSON converter](https://weblua.com/lua-table-to-json)
+that works both ways. The comparisons [`/lua-vs-luau`](https://weblua.com/lua-vs-luau) and
+[`/lua-5-1-vs-5-4`](https://weblua.com/lua-5-1-vs-5-4) are articles with both runtimes
+embedded side by side. [`/examples`](https://weblua.com/examples) holds runnable examples
+with their output on Lua 5.1, 5.4, and Luau, and [`/learn-luau`](https://weblua.com/learn-luau)
+is an eight-lesson course: animated walkthroughs that step through code and show each
+variable change, predict-the-output quizzes, and an exercise per lesson in an embedded
+editor whose passing run marks the lesson done.
+
+All of this text lives in `src/lib/` (`guidePages.ts`, `lessonPages.ts`, `examplePages.ts`).
+`src/workers/articles.execution.test.ts` runs every code block, walkthrough, quiz, and
+exercise against the real runtimes and type-checks the Luau in strict mode, and
+`src/lib/articles.test.ts` keeps pages from going thin or linking to pages that don't exist.
+The build adds per-page JSON-LD and writes `llms.txt`.
 
 ## Try the capability tour
 

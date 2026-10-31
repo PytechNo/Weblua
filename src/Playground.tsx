@@ -38,6 +38,8 @@ import {
 import {
   type ChangeEvent,
   type CSSProperties,
+  lazy,
+  Suspense,
   type UIEvent,
   useCallback,
   useEffect,
@@ -71,7 +73,7 @@ import {
   toolExamples
 } from "./lib/examples";
 import { gistHash, gistIdFrom, loadGistProject, readGistHash } from "./lib/gist";
-import { type PlaygroundTool, TOOL_PATHS } from "./lib/routes";
+import { type PlaygroundTool, readCompareHash, TOOL_PATHS } from "./lib/routes";
 import { onLuauAnalysisReady, warmLuauAnalysis } from "./lib/luauAnalysis";
 import { dumpLuauBytecode, optimizeHotComment, parseBytecodeListing } from "./lib/luauBytecode";
 import {
@@ -125,6 +127,9 @@ const typeModeOptions: Array<{ value: LuauTypeMode; label: string }> = [
 ];
 
 const compilerLevels: CompilerLevel[] = [0, 1, 2];
+
+/** A tool page's guide, below the editor: text the editor itself never needs. */
+const ToolGuide = lazy(() => import("./components/Articles").then((module) => ({ default: module.ToolGuide })));
 
 /** Comparison pages open with Compare already on, against this runtime. */
 const toolCompare: Partial<Record<PlaygroundTool, RuntimeFlavor>> = {
@@ -351,7 +356,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const [result, setResult] = useState<RunResult | null>(null);
   /** The same run on the Compare runtime. Null whenever the output pane shows one result. */
   const [compareResult, setCompareResult] = useState<RunResult | null>(null);
-  const [compareFlavor, setCompareFlavor] = useState<RuntimeFlavor | null>(() => (tool && toolCompare[tool]) ?? null);
+  const [compareFlavor, setCompareFlavor] = useState<RuntimeFlavor | null>(() => {
+    const linked = runtimeOptions.find((runtime) => runtime.value === readCompareHash())?.value;
+    return linked ?? (tool && toolCompare[tool]) ?? null;
+  });
   const [isRunning, setIsRunning] = useState(false);
   /** Off: five seconds per run. On: thirty, for benchmarks and heavy loops. */
   const [longRuns, setLongRuns] = useState(false);
@@ -562,6 +570,12 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       const [nextResult, nextOther] = await Promise.all([handle.result, other?.result ?? null]);
       setResult(nextResult);
       setCompareResult(nextOther);
+      // Weblua's own lesson pages mark an exercise done from this. The target
+      // origin keeps the output from reaching third-party pages that embed us.
+      if (isEmbed && window.parent !== window) {
+        const output = nextResult.chunks.filter((chunk) => chunk.kind === "stdout").map((chunk) => chunk.text).join("\n");
+        window.parent.postMessage({ type: "weblua:run", status: nextResult.status, output }, window.location.origin);
+      }
       trackEvent("run", { flavor, status: nextResult.status, timeoutMs, ...(compareWith ? { compare: compareWith } : {}) });
     } catch (error) {
       reportRuntimeError(error);
@@ -577,7 +591,17 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       runRef.current = null;
       setIsRunning(false);
     }
-  }, [compareWith, longRuns, workspace]);
+  }, [compareWith, isEmbed, longRuns, workspace]);
+
+  // "Run it here" on an article swaps in `/embed#example=…&run=1`, already
+  // pressed. Only Weblua's own examples run unasked, never shared code.
+  const autorunDone = useRef(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (!isEmbed || !isHydrated || autorunDone.current || !params.has("example") || params.get("run") !== "1") return;
+    autorunDone.current = true;
+    void execute();
+  }, [execute, isEmbed, isHydrated]);
 
   /**
    * Ends the run and keeps what it printed. The handle resolves a "stopped"
@@ -1281,7 +1305,19 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const isLuau = workspace.project.flavor === "luau";
 
   return (
-    <PlaygroundShell theme={theme} onToggleTheme={onToggleTheme} isEmbed={isEmbed} tool={tool}>
+    <PlaygroundShell
+      theme={theme}
+      onToggleTheme={onToggleTheme}
+      isEmbed={isEmbed}
+      tool={tool}
+      guide={
+        tool && !isEmbed ? (
+          <Suspense fallback={null}>
+            <ToolGuide tool={tool} />
+          </Suspense>
+        ) : undefined
+      }
+    >
       <main className={`workspace${layout}`}>
         {compact ? (
           <div className="compact-top">

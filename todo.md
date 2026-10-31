@@ -449,6 +449,27 @@ prerendered text with an `<h1>`, a sitemap entry, and the nginx trailing-slash f
   Done, ahead of the audience data: five lessons (values, tables, functions, control
   flow, types), each ending in an exercise embedded from `/embed#example=…`. A test
   checks every exercise fails as shipped and passes with its solution.
+- [x] **Rebuilt the pages above (2026-10-31)**: the first versions were thin (100–150
+  words each, the tool and comparison text in a floating card over the editor) and
+  unstyled. Now:
+  - A site header and footer shared by every content page, a short answer under each
+    `<h1>`, an "On this page" rail, FAQs, sources, and related links.
+  - `/lua-vs-luau` and `/lua-5-1-vs-5-4` are articles (1,500–2,000 words) with both runtimes
+    embedded side by side; an old share link to them (`#c=`) still opens the editor.
+  - Tool pages keep the editor on the first screen with a guide below it (550–1,650 words).
+    The pattern tester has presets and a cheat sheet whose Try it links load the pattern
+    through `#p=…&s=…`, which also makes a test linkable.
+  - Learn Luau has eight lessons (added strings, metatables and classes, coroutines and
+    `task`), with animated walkthroughs (`TraceStage`), an animated `__index` lookup,
+    predict-the-output quizzes, and progress kept in localStorage: an embed's passing run
+    posts `weblua:run` to its same-origin parent, which marks the lesson done.
+  - Every output, walkthrough, and quiz answer is pinned by a test; `articles.test.ts`
+    sets word-count floors, title and description lengths, and checks internal links.
+  - Per-page JSON-LD (TechArticle, Course, LearningResource, WebApplication, FAQPage,
+    BreadcrumbList) and `dist/llms.txt` from the postbuild.
+  - Corrected a claim from the first version: Luau doesn't remove `loadstring`; the core
+    VM leaves it to the host, and Weblua's doesn't add it.
+  Re-rank these queries from Search Console in a few weeks.
 - Avoid: obfuscator, deobfuscator, decompiler, executor, "unc test", and script hubs.
   They have volume, but they bring an exploit audience that sponsors and ad networks
   avoid.

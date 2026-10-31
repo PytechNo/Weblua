@@ -1,12 +1,12 @@
 // @vitest-environment node
 //
-// The example pages, lessons, and comparison demos print outputs and make
-// claims about runtimes, so every block runs here and must print what its page
-// shows. The Luau ones must also type-check in strict mode, which is the mode
-// the playground opens them in.
+// The example pages, lessons, and guides print outputs and make claims about
+// runtimes, so every block runs here and must print what its page shows. So
+// do the lessons' walkthroughs and quizzes. The Luau code must also
+// type-check in strict mode, which is the mode the playground opens it in.
 import { Analysis } from "@luau-rs/luau/analysis";
 import { describe, expect, it } from "vitest";
-import { articleHubs, exerciseSource } from "../lib/articles";
+import { exerciseSource, pagesWithCode } from "../lib/articles";
 import { projectForExample, toolExamples } from "../lib/examples";
 import type { ProjectPayload, RunResult, RuntimeFlavor } from "../lib/types";
 import { LuauAnalysisSession, WEBLUA_LUAU_DEFINITIONS } from "./luauAnalysisSession";
@@ -17,19 +17,20 @@ function snippet(code: string, flavor: RuntimeFlavor): ProjectPayload {
   return { flavor, entry, files: { [entry]: code } };
 }
 
-/** What an article shows: program output, without Weblua's status lines. */
+/** What a page shows: program output, without Weblua's status lines. */
 function shown(result: RunResult): string {
   return result.chunks.filter((chunk) => chunk.kind !== "system").map((chunk) => chunk.text).join("\n");
 }
 
-const blocks = Object.values(articleHubs).flatMap((hub) =>
-  hub.pages.flatMap((page) =>
-    page.blocks.flatMap((block, index) => (block.code ? [{ name: `${page.slug} block ${index + 1}`, code: block.code }] : []))
-  )
+const pages = pagesWithCode();
+const blocks = pages.flatMap(({ page }) =>
+  page.blocks.flatMap((block, index) => (block.code ? [{ name: `${page.slug} block ${index + 1}`, code: block.code }] : []))
 );
-const exercises = Object.values(articleHubs).flatMap((hub) =>
-  hub.pages.flatMap((page) => (page.exercise ? [{ slug: page.slug, exercise: page.exercise }] : []))
+const traces = pages.flatMap(({ page }) => page.blocks.flatMap((block) => (block.trace ? [{ name: `${page.slug}: ${block.trace.title}`, trace: block.trace }] : [])));
+const quizzes = pages.flatMap(({ page }) =>
+  page.blocks.flatMap((block) => (block.quiz?.code ? [{ name: `${page.slug}: ${block.quiz.question}`, quiz: block.quiz }] : []))
 );
+const exercises = pages.flatMap(({ page }) => (page.exercise ? [{ slug: page.slug, exercise: page.exercise }] : []));
 
 describe("article code blocks", () => {
   it.each(blocks)("$name prints what its page shows", async ({ code }) => {
@@ -39,11 +40,12 @@ describe("article code blocks", () => {
     }
   });
 
-  it("type-checks every Luau block and exercise solution in strict mode", async () => {
+  it("type-checks every Luau block, walkthrough, and exercise solution in strict mode", async () => {
     const analysis = await Analysis.create({ mode: "strict", lint: true, definitions: [{ name: "weblua", source: WEBLUA_LUAU_DEFINITIONS }] });
     const session = new LuauAnalysisSession(analysis);
     const sources = [
       ...blocks.filter(({ code }) => code.flavor === "luau").map(({ name, code }) => [name, code.code]),
+      ...traces.map(({ name, trace }) => [name, trace.code]),
       ...exercises.flatMap(({ slug, exercise }) => [
         [`${slug} starter`, exerciseSource(exercise)],
         [`${slug} solution`, exerciseSource(exercise, exercise.solution)]
@@ -56,6 +58,24 @@ describe("article code blocks", () => {
       failures.push(...errors.map((error) => `${name} ${error.line}: ${error.message}`));
     }
     expect(failures).toEqual([]);
+  });
+});
+
+describe("lesson walkthroughs and quizzes", () => {
+  it.each(traces)("$name prints what its steps print", async ({ trace }) => {
+    const result = await runProjectForTest(snippet(trace.code, "luau"));
+    expect(result.status).toBe("ok");
+    expect(shown(result)).toBe(trace.steps.flatMap((step) => (step.print === undefined ? [] : [step.print])).join("\n"));
+  });
+
+  it.each(traces)("$name points every step at a real line", ({ trace }) => {
+    const lines = trace.code.split("\n").length;
+    expect(trace.steps.filter((step) => step.line < 1 || step.line > lines)).toEqual([]);
+  });
+
+  it.each(quizzes)("$name has the output as its answer", async ({ quiz }) => {
+    const result = await runProjectForTest(snippet(quiz.code!, "luau"));
+    expect(shown(result).replaceAll("\t", " ")).toBe(quiz.options[quiz.answer]);
   });
 });
 
