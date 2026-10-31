@@ -61,6 +61,42 @@ describe("luau end-to-end execution", () => {
       expect(stderrOf(result)).toEqual(["careful"]);
     }
   });
+
+  it("prints values as Luau's tostring does", async () => {
+    const result = await runProjectForTest({
+      flavor: "luau",
+      entry: "main.luau",
+      files: {
+        "main.luau": `
+          print(3 / 1, -0.0, math.huge, setmetatable({}, { __tostring = function() return "custom" end }))
+          print({})
+          warn(1 / 0)
+        `
+      }
+    });
+
+    expect(stdoutOf(result)[0]).toBe("3\t-0\tinf\tcustom");
+    expect(stdoutOf(result)[1]).toMatch(/^table: /);
+    expect(stderrOf(result)).toEqual(["inf"]);
+  });
+
+  it("names project files in error messages, as the Luau CLI does", async () => {
+    const result = await runProjectForTest({
+      flavor: "luau",
+      entry: "main.luau",
+      files: {
+        "lib/fail.luau": `return function() error("inner") end`,
+        "main.luau": `
+          print(pcall(require("lib/fail")))
+          local missing = nil
+          missing()
+        `
+      }
+    });
+
+    expect(stdoutOf(result)).toEqual(["false	lib/fail.luau:1: inner"]);
+    expect(stderrOf(result)).toEqual(["main.luau:4: attempt to call a nil value"]);
+  });
 });
 
 describe("luau task library", () => {
@@ -324,13 +360,49 @@ describe("luau require-by-string", () => {
 
     const alias = await runProjectForTest(luau({ "main.luau": `require("@lune/fs")` }));
     expect(alias.status).toBe("error");
-    expect(stderrOf(alias).join("\n")).toContain("unknown require alias '@lune'");
+    expect(stderrOf(alias).join("\n")).toContain("unknown require alias '@lune'; define it in a .luaurc file");
+
+    const dotted = await runProjectForTest(luau({ "main.luau": `require("nope.missing")` }));
+    expect(stderrOf(dotted)).toEqual(["main.luau:1: module 'nope.missing' not found"]);
   });
 });
 
 // The bytecode view tells people runs compile at level 1 and that a
 // --!optimize comment changes it; luau-web exposes no compiler options, so
 // these pin both claims to observable behavior.
+describe("luau .luaurc aliases and project data", () => {
+  it("resolves @aliases through the nearest .luaurc and never runs data files", async () => {
+    const result = await runProjectForTest({
+      flavor: "luau",
+      entry: "main.luau",
+      files: {
+        ".luaurc": JSON.stringify({ aliases: { shared: "lib/shared" } }),
+        // Relative to game/, as alias paths are to their .luaurc.
+        "game/.luaurc": JSON.stringify({ aliases: { shared: "../vendor" } }),
+        "game/run.luau": `return require("@shared").name`,
+        "lib/shared/init.luau": `return { name = "lib" }`,
+        "vendor/init.luau": `return { name = "vendor" }`,
+        "data.json": `{ "not": "luau" }`,
+        "main.luau": `print(require("@Shared").name, require("./game/run"))`
+      }
+    });
+
+    expect(result.status).toBe("ok");
+    expect(stdoutOf(result)).toEqual(["lib\tvendor"]);
+  });
+
+  it("fails the run with the reason when a .luaurc is not JSON", async () => {
+    const result = await runProjectForTest({
+      flavor: "luau",
+      entry: "main.luau",
+      files: { ".luaurc": "{ aliases: }", "main.luau": `print("never")` }
+    });
+
+    expect(result.status).toBe("error");
+    expect(stderrOf(result).join("\n")).toMatch(/^\.luaurc is not valid JSON/);
+  });
+});
+
 describe("luau optimization level", () => {
   const project = (main: string, files: Record<string, string> = {}): ProjectPayload => ({
     flavor: "luau",

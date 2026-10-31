@@ -58,7 +58,14 @@ Current Luau code — and every Luau standalone runtime — uses require-by-stri
   lookup; unknown aliases error with a clear message. Builtin modules plug in there.
 - [x] Keep legacy root-relative `lib.module` / `lib/module` working for existing
   share links and examples.
-- [ ] `.luaurc` alias files — blocked on non-source project files (see Deferred).
+- [x] `.luaurc` alias files: `readLuaurcAliases` in `src/lib/moduleAliases.ts` feeds the
+  runtime's require bootstrap and the type checker alike. The nearest `.luaurc` in the
+  requiring file's folder or above it wins; alias names are case-insensitive and paths
+  relative to their `.luaurc`. Invalid JSON fails the run and shows in Check.
+- [x] **Fixed while here**: a Luau `require("missing.module")` failed with "attempt to
+  concatenate table with string". luau-web exposes a JS object as a proxy whose missing
+  keys read as tables, so the alias lookups are now real Luau tables
+  (`buildLuauAliasTables`).
 
 ---
 
@@ -108,6 +115,7 @@ One per-version data source feeds completion and hover. Versions differ:
   the source does not parse.
 - [ ] Lua 5.5: StyLua 2.5.2 has no 5.5 mode, so 5.5 files format as 5.4 and
   5.5-only syntax (`global`) gets a notice. Switch when StyLua adds 5.5.
+  Checked 2026-10-31: StyLua 2.6.0 still has no 5.5 mode.
 
 ---
 
@@ -187,7 +195,7 @@ build of `Luau.Analysis` and tracking upstream releases.
 - [ ] **Type solver toggle**: the analysis wasm contains both solvers (the
   `LuauSolverV2` flag is in the binary), but `@luau-rs/luau` exposes no way to set
   it. Ask upstream for a solver option, or get it with an owned build (see the
-  download-size item in 6).
+  download-size item in 6). Checked 2026-10-31: 0.739.0 is still the latest release.
 
 ---
 
@@ -258,9 +266,10 @@ What the pages above us do differently:
   developers): this is the open community-posts and luau.org items in 7. luau-web,
   which ranks #4–#7, has a DevForum Community Resources post (Sep 2025) behind it.
   seaofvoices/awesome-luau lists npm packages only, so it is not an option.
-- [ ] **Only if "lua playground" stalls**: exact-match `/lua` and `/luau` pages, as
-  Coddy and codapi have. `scripts/postbuild.mjs` already generates per-route HTML,
-  so this is mostly route config, an nginx location, and the router.
+- [x] **Exact-match `/lua` and `/luau` pages**, as Coddy and codapi have: tool pages
+  titled "Lua Playground" and "Luau Playground", opening on a short demo. Built ahead of
+  the "only if it stalls" trigger; watch Search Console for cannibalization with
+  `/playground`, which now targets "online lua compiler" instead.
 
 No action needed:
 
@@ -344,17 +353,22 @@ Work through the following in priority order:
   [W3C's enhanced target-size guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced).
   Done: 44 px under `(pointer: coarse)`, so touch tablets get it too; mouse
   layouts are unchanged.
-- [ ] **Add mobile editing controls**: visible Undo, Redo, Indent, Outdent, and
+- [x] **Add mobile editing controls**: visible Undo, Redo, Indent, Outdent, and
   common punctuation shortcuts; adjustable editor text size and a line-wrap
   option. The current editor text is 13.5 pixels.
-- [ ] **Make tools discoverable by touch**: replace the input "+" with a labeled
+  Done: a key bar under the editor in the compact layout on touch screens (it keeps
+  the editor focused, so the keyboard stays up), and Text size (12–19 px) and Wrap
+  long lines in the menu, kept per browser.
+- [x] **Make tools discoverable by touch**: replace the input "+" with a labeled
   Input button, make icon explanations available without hovering, and make
   error messages tappable to open the relevant file and jump to the line/column.
-  Partly done: the Input button is labeled (icon only when the output pane is
-  under 380 px), and the compact menu labels every action. Tappable errors are
-  still open.
-- [ ] **Show save status and support recovery**: display Saving / Saved locally
+  Done: the Input button is labeled (icon only when the output pane is under
+  380 px), the compact menu labels every action, and `file:line[:column]` in stderr
+  and Check output is a link that opens that file at that spot.
+- [x] **Show save status and support recovery**: display Saving / Saved locally
   and failures, and offer Undo after resetting the workspace or deleting a file.
+  Done: the status sits in the editor header (the menu header on phones) and says
+  when storage is off; Start over and Delete file leave an Undo in the notice.
 - [x] **Use native mobile sharing**: offer the phone's share sheet where supported
   while retaining Copy link and a usable fallback when clipboard access fails.
   Done: on touch devices with `navigator.share` the button reads "Share link" and
@@ -369,10 +383,14 @@ Work through the following in priority order:
   dismissal, Run/Stop access, caret visibility, touch selection, autocomplete,
   scrolling, and portrait/landscape transitions. Viewport screenshots alone do
   not verify these behaviors.
-- [ ] **Later: reliable offline reopening**: add a service worker and cache the
+- [x] **Later: reliable offline reopening**: add a service worker and cache the
   app and required runtime assets so a previously loaded project can reopen and
   run offline. The manifest and icons already exist; keep the current offline
   limitations clear until offline startup is implemented and verified.
+  Done: `public/sw.js`, production only. Hashed assets are cache-first, pages
+  network-first; each runtime is cached the first time a run fetches it. Verified on a
+  production build: ran Lua 5.1 vs Luau, stopped the server, reloaded, and ran again.
+  FAQ, JSON-LD, and README now describe what works offline.
 
 ---
 
@@ -394,29 +412,43 @@ prerendered text with an `<h1>`, a sitemap entry, and the nginx trailing-slash f
   error (pinned by a test). Targets "luau type checking" and "luau strict mode"; no
   browser option found. Tool pages neither restore nor save the draft, so they can't
   overwrite `/playground`'s.
-- [ ] **`/lua-vs-luau`**: run the same code on Lua 5.1 and Luau side by side. The pages
+- [x] **`/lua-vs-luau`**: run the same code on Lua 5.1 and Luau side by side. The pages
   ranking now (DevForum, GeeksforGeeks, Codecademy) disagree, for example on `continue`.
   Autocomplete: "lua vs luau" with differences / performance / syntax / roblox, and
   "lua 5.1 vs luau".
-- [ ] **`/lua-pattern-tester`**: `string.find`/`match`/`gmatch` with highlighted captures
+  Done, on a general **Compare** control (any two runtimes, in every playground):
+  both runs stream into the output pane, with a note when they differ. The demo's
+  claims are pinned by `articles.execution.test.ts`.
+- [x] **`/lua-pattern-tester`**: `string.find`/`match`/`gmatch` with highlighted captures
   on every runtime. Competitors are small fengari (Lua 5.3) GitHub Pages tools.
   Autocomplete: "lua pattern tester", "lua pattern matching online", "lua patterns
   cheat sheet".
-- [ ] **Target "online lua compiler"**: "lua online compiler / interpreter / editor /
+  Done (`src/components/Tools.tsx`, `src/lib/patternTester.ts`): every match with byte
+  positions and captures, and gsub's result, on the runtime picked. The runtime's own
+  gmatch decides the empty-match rule (5.1, 5.2, and Luau keep an empty match after a
+  match; 5.3+ skip it).
+- [x] **Target "online lua compiler"**: "lua online compiler / interpreter / editor /
   ide" sit at position 42–48 today against myCompiler, OneCompiler, JDoodle, and Replit.
   Try `/playground`'s title and about text first; separate exact-match pages only if
   that stalls (see the last open item in 9).
-- [ ] **`/examples` hub with 6–8 runnable pages**: string split / format / interpolation,
+  Done: `/playground`'s `<h1>` is "Online Lua & Luau Compiler" and its title "Online Lua
+  Compiler & Luau Playground". Re-rank from Search Console in a few weeks.
+- [x] **`/examples` hub with 6–8 runnable pages**: string split / format / interpolation,
   metatables and `__index`, Luau OOP, Luau types. Each shows its output on 5.1, 5.4, and
   Luau. Write each by hand; don't mass-generate thin pages.
-- [ ] **`/lua-5-1-vs-5-4`**: same shape as Lua vs Luau ("lua 5.1 vs 5.4").
-- [ ] **`/lua-table-to-json`** (and JSON to Lua table): evaluate the literal in the
+  Done: six pages from `src/lib/articles.ts`, prerendered. Every block's printed output
+  is pinned by a test, and its Luau type-checks in strict mode.
+- [x] **`/lua-5-1-vs-5-4`**: same shape as Lua vs Luau ("lua 5.1 vs 5.4").
+- [x] **`/lua-table-to-json`** (and JSON to Lua table): evaluate the literal in the
   sandbox and serialize it. Competitors are generic tool sites (DevToolLab).
-- [ ] **`/luau-bytecode-viewer`**: the Bytecode tab as a tool page. Low volume, cheap.
-- [ ] **`/learn-luau` lessons**, after the items above show which audience arrives: short
+- [x] **`/luau-bytecode-viewer`**: the Bytecode tab as a tool page. Low volume, cheap.
+- [x] **`/learn-luau` lessons**, after the items above show which audience arrives: short
   lessons with checked exercises, pure Luau (Roblox value types stay Deferred below).
   "learn luau free / online", "roblox scripting tutorial", and "roblox studio
   chromebook" are common searches; never present Weblua as Studio.
+  Done, ahead of the audience data: five lessons (values, tables, functions, control
+  flow, types), each ending in an exercise embedded from `/embed#example=…`. A test
+  checks every exercise fails as shipped and passes with its solution.
 - Avoid: obfuscator, deobfuscator, decompiler, executor, "unc test", and script hubs.
   They have volume, but they bring an exploit audience that sponsors and ad networks
   avoid.
@@ -430,9 +462,10 @@ prerendered text with an `<h1>`, a sitemap entry, and the nginx trailing-slash f
   Lune and Lute over one implementation — their module layouts differ, so each is
   its own adapter. Unsupported calls (`net.serve`, `process.exec`) must `error()`
   with a browser-limitation message.
-- **Non-source project files**: prerequisite for `fs` reads and `.luaurc`. Today
-  every project file is compiled before a run, so a `data.json` would fail the run.
-  Touches validation, the codec and share links, and the file tree.
+- ~~**Non-source project files**~~: done. A file with an extension other than `.lua`
+  or `.luau` is project data (`isSourcePath` in `src/lib/project.ts`): shared and
+  saved, never compiled or linted, and readable with `io.open` on Lua 5.4, which now
+  runs from the project folder. An `fs` module would build on this.
 - **Roblox value types** (`Vector3`, `CFrame`): defensible as pure math types, but a
   correct `CFrame` is large. Only if there is clear demand.
 

@@ -5,7 +5,8 @@ import type {
   AutocompleteEntry
 } from "@luau-rs/luau/analysis";
 import { dedupeDiagnostics } from "../lib/diagnostics";
-import { buildModuleAliases, resolveLuauRequire } from "../lib/moduleAliases";
+import { buildModuleAliases, type LuaurcAliases, readLuaurcAliases, resolveLuauRequire } from "../lib/moduleAliases";
+import { isSourcePath } from "../lib/project";
 import type {
   AnalysisRequest,
   AnalysisResults,
@@ -75,6 +76,7 @@ export class LuauAnalysisSession {
   #entry = "";
   #mode: CheckMode | undefined;
   #aliases: Record<string, string> = {};
+  #luaurc: LuaurcAliases = {};
 
   constructor(analysis: Analysis) {
     this.#analysis = analysis;
@@ -90,8 +92,10 @@ export class LuauAnalysisSession {
     this.#entry = project.entry;
     let pathsChanged = false;
 
+    // Project data (data.json, .luaurc) is not a module; .luaurc only feeds alias lookups.
+    this.#luaurc = readLuaurcAliases(project.files).aliases;
     for (const name of [...this.#sources.keys()]) {
-      if (!Object.hasOwn(project.files, name)) {
+      if (!Object.hasOwn(project.files, name) || !isSourcePath(name)) {
         this.#analysis.deleteModule(name);
         this.#sources.delete(name);
         pathsChanged = true;
@@ -99,6 +103,7 @@ export class LuauAnalysisSession {
     }
 
     for (const [name, source] of Object.entries(project.files)) {
+      if (!isSourcePath(name)) continue;
       const kindChanged =
         previousEntry !== project.entry && (name === project.entry || name === previousEntry);
       if (this.#sources.get(name) === source && !kindChanged) continue;
@@ -174,7 +179,7 @@ export class LuauAnalysisSession {
   }
 
   #resolve({ from, specifier }: ModuleRequest): ResolvedModule | undefined {
-    const path = resolveLuauRequire(this.#aliases, (name) => this.#sources.has(name), from, specifier);
+    const path = resolveLuauRequire(this.#aliases, (name) => this.#sources.has(name), from, specifier, this.#luaurc);
     const source = path === undefined ? undefined : this.#sources.get(path);
     return path === undefined || source === undefined
       ? undefined

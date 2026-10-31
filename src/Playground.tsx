@@ -1,6 +1,8 @@
+import { indentLess, indentMore, redo, undo } from "@codemirror/commands";
 import { defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { type Diagnostic as CmDiagnostic, forceLinting, lintGutter, linter } from "@codemirror/lint";
 import { oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
+import { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import {
@@ -12,24 +14,30 @@ import {
   ExternalLink,
   FilePlus2,
   FolderOpen,
+  IndentDecrease,
+  IndentIncrease,
   Keyboard,
   Link,
   Menu,
   Pencil,
   Play,
   Plus,
+  Redo2,
   RotateCcw,
   Save,
   ShieldCheck,
   Square,
   Timer,
   Trash2,
+  Undo2,
   Upload,
   WandSparkles,
+  WrapText,
   X
 } from "lucide-react";
 import {
   type ChangeEvent,
+  type CSSProperties,
   type UIEvent,
   useCallback,
   useEffect,
@@ -53,28 +61,36 @@ import {
 } from "./lib/codec";
 import { diagnosticRange, formatDiagnostic } from "./lib/diagnostics";
 import { luauIntelligence } from "./lib/editorIntelligence";
+import { linkLocations } from "./lib/outputLinks";
 import {
   defaultExample,
   exampleMatchesProject,
   examples,
+  findExample,
   projectForExample,
   toolExamples
 } from "./lib/examples";
 import { gistHash, gistIdFrom, loadGistProject, readGistHash } from "./lib/gist";
-import { TOOL_PATHS, type ToolPage } from "./lib/routes";
+import { type PlaygroundTool, TOOL_PATHS } from "./lib/routes";
 import { onLuauAnalysisReady, warmLuauAnalysis } from "./lib/luauAnalysis";
 import { dumpLuauBytecode, optimizeHotComment, parseBytecodeListing } from "./lib/luauBytecode";
 import {
+  EDITOR_FONT_SIZES,
+  type EditorOptions,
   readBytecodeOptions,
+  readEditorOptions,
   readLuauTypeMode,
   storeBytecodeOptions,
+  storeEditorOptions,
   storeLuauTypeMode
 } from "./lib/preferences";
 import {
   createDefaultWorkspace,
   deleteProjectFile,
+  isSourcePath,
   renameProjectFile,
   runtimeFileExtension,
+  runtimeOptions,
   setProjectEntry,
   upsertProjectFile
 } from "./lib/project";
@@ -102,15 +118,6 @@ import {
 
 type Theme = "dark" | "light";
 
-const runtimeOptions: Array<{ value: RuntimeFlavor; label: string }> = [
-  { value: "lua51", label: "Lua 5.1" },
-  { value: "lua52", label: "Lua 5.2" },
-  { value: "lua53", label: "Lua 5.3" },
-  { value: "lua54", label: "Lua 5.4" },
-  { value: "lua55", label: "Lua 5.5" },
-  { value: "luau", label: "Luau" }
-];
-
 const typeModeOptions: Array<{ value: LuauTypeMode; label: string }> = [
   { value: "strict", label: "Strict" },
   { value: "nonstrict", label: "Nonstrict" },
@@ -118,6 +125,12 @@ const typeModeOptions: Array<{ value: LuauTypeMode; label: string }> = [
 ];
 
 const compilerLevels: CompilerLevel[] = [0, 1, 2];
+
+/** Comparison pages open with Compare already on, against this runtime. */
+const toolCompare: Partial<Record<PlaygroundTool, RuntimeFlavor>> = {
+  "lua-vs-luau": "luau",
+  "lua51-vs-lua54": "lua54"
+};
 
 /** Phones in either orientation; embeds are always compact. Keep in step with styles.css. */
 const COMPACT_QUERY = "(max-width: 640px), (max-width: 880px) and (max-height: 500px)";
@@ -138,6 +151,17 @@ function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(subscribe, () => window.matchMedia?.(query).matches ?? false);
 }
 
+/** Touch screens: no hover, no physical keyboard to hand. */
+const COARSE_QUERY = "(pointer: coarse)";
+
+/** Characters a phone keyboard hides behind extra taps, for the key bar. */
+const KEY_BAR_CHARACTERS = ["(", ")", "{", "}", "[", "]", '"', "=", ".", ":", ",", "#", "~", "-"];
+
+/** Line wrapping, switched without rebuilding the editor's extensions. */
+const wrapCompartment = new Compartment();
+
+type SaveState = "saving" | "saved" | "failed" | "memory";
+
 /** Pause after the last keystroke before the open file is recompiled. */
 const BYTECODE_DELAY_MS = 250;
 
@@ -150,7 +174,7 @@ type BytecodeState =
 const sharedEditorChrome = {
   "&": {
     height: "100%",
-    fontSize: "13.5px",
+    fontSize: "var(--editor-font-size, 13.5px)",
     backgroundColor: "transparent"
   },
   "&.cm-focused": {
@@ -267,7 +291,7 @@ function hasPendingRestore(keepsDraft: boolean): boolean {
   return keepsDraft && hasStoredDraftHint();
 }
 
-function defaultWorkspace(tool?: ToolPage): Workspace {
+function defaultWorkspace(tool?: PlaygroundTool): Workspace {
   const example = tool ? toolExamples[tool] : defaultExample;
   const project = projectForExample(example);
   return {
@@ -315,7 +339,7 @@ interface PlaygroundProps {
   theme: Theme;
   onToggleTheme: () => void;
   isEmbed: boolean;
-  tool?: ToolPage;
+  tool?: PlaygroundTool;
 }
 
 export default function Playground({ theme, onToggleTheme, isEmbed, tool }: PlaygroundProps) {
@@ -325,6 +349,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const [workspace, setWorkspace] = useState<Workspace>(() => defaultWorkspace(tool));
   const [projects, setProjects] = useState<StoredWorkspaceProject[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
+  /** The same run on the Compare runtime. Null whenever the output pane shows one result. */
+  const [compareResult, setCompareResult] = useState<RunResult | null>(null);
+  const [compareFlavor, setCompareFlavor] = useState<RuntimeFlavor | null>(() => (tool && toolCompare[tool]) ?? null);
   const [isRunning, setIsRunning] = useState(false);
   /** Off: five seconds per run. On: thirty, for benchmarks and heavy loops. */
   const [longRuns, setLongRuns] = useState(false);
@@ -337,15 +364,20 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   // hash is read and restore() is in flight.
   const [restorePending] = useState(() => hasPendingRestore(keepsDraft));
   const [notice, setNotice] = useState<string | null>(null);
+  /** What the notice's Undo button restores, while that notice is up. */
+  const [undoable, setUndoable] = useState<{ notice: string; workspace: Workspace } | null>(null);
+  const [saveState, setSaveState] = useState<SaveState | null>(null);
+  const [editorOptions, setEditorOptions] = useState<EditorOptions>(readEditorOptions);
   const [copiedInput, setCopiedInput] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
   const [inputOpen, setInputOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [outputTab, setOutputTab] = useState<OutputTab>("output");
+  const [outputTab, setOutputTab] = useState<OutputTab>(tool === "bytecode" ? "bytecode" : "output");
   // Phones and embeds get the compact layout: one slim bar, everything else in a menu.
   // Below 640px it also shows one pane at a time, picked by phonePane.
   const compact = useMediaQuery(COMPACT_QUERY) || isEmbed;
   const narrow = useMediaQuery(NARROW_QUERY);
+  const coarse = useMediaQuery(COARSE_QUERY);
   const tall = useMediaQuery(TALL_QUERY);
   // Phones keep tabs even when tall: with the keyboard open, a stacked editor would be a sliver.
   const layout = !compact ? "" : !narrow ? " is-compact" : isEmbed && tall ? " is-compact is-stacked" : " is-compact is-tabbed";
@@ -403,8 +435,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     const restore = async () => {
       try {
         const gistId = readGistHash(window.location.hash);
+        const linkedExample = await findExample(window.location.hash);
         const [shared, draft, savedProjects] = await Promise.all([
-          gistId ? readGist(gistId) : readProjectShareHash(window.location.hash),
+          gistId ? readGist(gistId) : linkedExample ? projectForExample(linkedExample) : readProjectShareHash(window.location.hash),
           keepsDraft ? workspaceStore.getDraft() : null,
           isEmbed ? ([] as StoredWorkspaceProject[]) : workspaceStore.listProjects()
         ]);
@@ -439,12 +472,26 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       return;
     }
 
+    setSaveState("saving");
+    let cancelled = false;
     const timer = window.setTimeout(() => {
-      void workspaceStore.saveWorkspace(workspace);
+      void workspaceStore.saveWorkspace(workspace).then((saved) => {
+        if (cancelled) return;
+        // Memory mode "saves" fine but forgets on reload, so it is not "Saved".
+        setSaveState(!saved ? "failed" : workspaceStore.mode === "memory" ? "memory" : "saved");
+      });
     }, 450);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [keepsDraft, isHydrated, workspace]);
+
+  useEffect(() => {
+    storeEditorOptions(editorOptions);
+    editorRef.current?.view?.dispatch({ effects: wrapCompartment.reconfigure(editorOptions.wrap ? EditorView.lineWrapping : []) });
+  }, [editorOptions]);
 
   const activeCode = workspace.project.files[workspace.activeFile] ?? "";
   /** Hold back content whose size a pending restore would change. */
@@ -457,6 +504,13 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const updateWorkspace = useCallback((update: (current: Workspace) => Workspace) => {
     setWorkspace((current) => update(current));
   }, []);
+
+  const clearOutput = () => {
+    setResult(null);
+    setCompareResult(null);
+  };
+
+  const compareWith = compareFlavor !== workspace.project.flavor ? compareFlavor : null;
 
   const execute = useCallback(async () => {
     if (runRef.current) return;
@@ -471,31 +525,47 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     try {
       // Output is accumulated outside state: several worker messages can
       // arrive between renders, and each one needs the full list so far.
-      let live: OutputChunk[] = [];
-      const handle = runProject(workspace.project, workspace.stdin, {
-        timeoutMs,
-        onOutput: (chunks) => {
-          live = [...live, ...chunks];
-          setResult({ id: handle.id, flavor, status: "ok", durationMs: 0, chunks: live });
-        }
-      });
-      runRef.current = handle;
+      const start = (project: ProjectPayload, show: (result: RunResult) => void): RunHandle => {
+        let live: OutputChunk[] = [];
+        const handle = runProject(project, workspace.stdin, {
+          timeoutMs,
+          onOutput: (chunks) => {
+            live = [...live, ...chunks];
+            show({ id: handle.id, flavor: project.flavor, status: "ok", durationMs: 0, chunks: live });
+          }
+        });
+        // The same id as the result that will replace this, so the output pane
+        // stays mounted for the whole run instead of remounting at the end.
+        show({
+          id: handle.id,
+          flavor: project.flavor,
+          status: "ok",
+          durationMs: 0,
+          chunks: [{ kind: "system", text: "Running..." }]
+        });
+        return handle;
+      };
 
-      // The same id as the result that will replace this, so the output pane
-      // stays mounted for the whole run instead of remounting at the end.
-      setResult({
+      // Compare runs both runtimes at once, each in its own worker.
+      const handle = start(workspace.project, setResult);
+      const other = compareWith ? start({ ...workspace.project, flavor: compareWith }, setCompareResult) : null;
+      if (!other) setCompareResult(null);
+      runRef.current = {
         id: handle.id,
-        flavor,
-        status: "ok",
-        durationMs: 0,
-        chunks: [{ kind: "system", text: "Running..." }]
-      });
+        result: handle.result,
+        stop: () => {
+          handle.stop();
+          other?.stop();
+        }
+      };
 
-      const nextResult = await handle.result;
+      const [nextResult, nextOther] = await Promise.all([handle.result, other?.result ?? null]);
       setResult(nextResult);
-      trackEvent("run", { flavor, status: nextResult.status, timeoutMs });
+      setCompareResult(nextOther);
+      trackEvent("run", { flavor, status: nextResult.status, timeoutMs, ...(compareWith ? { compare: compareWith } : {}) });
     } catch (error) {
       reportRuntimeError(error);
+      setCompareResult(null);
       setResult({
         id: "failed",
         flavor,
@@ -507,7 +577,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       runRef.current = null;
       setIsRunning(false);
     }
-  }, [longRuns, workspace]);
+  }, [compareWith, longRuns, workspace]);
 
   /**
    * Ends the run and keeps what it printed. The handle resolves a "stopped"
@@ -579,6 +649,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         });
       }
 
+      setCompareResult(null);
       setResult({
         id: checked.id,
         flavor: checked.flavor,
@@ -602,6 +673,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     if (!view) return;
     const { project, activeFile } = workspaceRef.current;
     const source = view.state.doc.toString();
+    if (!isSourcePath(activeFile)) {
+      setNotice("Format works on .lua and .luau files.");
+      return;
+    }
 
     setIsFormatting(true);
     try {
@@ -663,9 +738,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     const liveLinter = linter(
       async (view): Promise<CmDiagnostic[]> => {
         const source = view.state.doc.toString();
-        if (!source.trim()) return [];
-
         const { project, activeFile } = workspaceRef.current;
+        if (!source.trim() || !isSourcePath(activeFile)) return [];
+
         // Only the open file is type-checked per keystroke, and a cold
         // analyzer is skipped rather than awaited; it forces a fresh pass
         // when it finishes loading.
@@ -700,7 +775,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       luauIntelligence(() => ({ ...workspaceRef.current, typeMode: typeModeRef.current }))
     );
 
-    return [language, liveLinter, lintGutter(), selectionLayer];
+    return [language, liveLinter, lintGutter(), selectionLayer, wrapCompartment.of(readEditorOptions().wrap ? EditorView.lineWrapping : [])];
   }, []);
 
   // A stable lint source no longer re-runs just because the extension array
@@ -766,7 +841,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       stdin: "stdin" in example ? example.stdin ?? "" : "",
       activeProjectId: undefined
     });
-    setResult(null);
+    clearOutput();
     setNotice(`Loaded ${example.title}.`);
   };
 
@@ -816,6 +891,12 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     }
   };
 
+  /** Shows `message` with an Undo button that puts `previous` back. */
+  const offerUndo = (message: string, previous: Workspace) => {
+    setNotice(message);
+    setUndoable({ notice: message, workspace: previous });
+  };
+
   const deleteActiveFile = () => {
     try {
       const project = deleteProjectFile(workspace.project, workspace.activeFile);
@@ -823,6 +904,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         ? workspace.project.entry
         : Object.keys(project.files)[0];
       setWorkspace({ ...workspace, project, activeFile });
+      offerUndo(`Deleted ${workspace.activeFile}.`, workspace);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not delete that file.");
     }
@@ -887,7 +969,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const copyOutput = async () => {
     const text = showBytecode
       ? bytecodeListing
-      : (result?.chunks ?? []).map((chunk) => chunk.text).join("\n");
+      : compareResult && result
+        ? [result, compareResult].map((run) => `-- ${runtimeLabel(run.flavor)}\n${outputText(run)}`).join("\n\n")
+        : outputText(result);
     await navigator.clipboard.writeText(text);
     setCopiedOutput(true);
     trackEvent(showBytecode ? "copy_bytecode" : "copy_output", { flavor: workspace.project.flavor });
@@ -920,17 +1004,60 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   };
 
   const reset = async () => {
+    const previous = workspace;
     skipNextAutosave.current = true;
     setWorkspace(defaultWorkspace(tool));
-    setResult(null);
-    setNotice(null);
+    clearOutput();
+    offerUndo("Started over.", previous);
     window.history.replaceState(null, "", tool ? `/${TOOL_PATHS[tool]}` : "/playground");
     if (keepsDraft) await workspaceStore.clearDraft();
   };
 
+  const undoLast = () => {
+    if (!undoable) return;
+    setWorkspace(undoable.workspace);
+    setUndoable(null);
+    setNotice(null);
+  };
+
+  /** Opens `file` at a reported line, from a link in the output. */
+  const pendingJump = useRef<{ line: number; column?: number } | null>(null);
+  const moveCursor = useCallback((line: number, column = 1) => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+    const target = view.state.doc.line(Math.min(Math.max(line, 1), view.state.doc.lines));
+    const anchor = target.from + Math.min(Math.max(column - 1, 0), target.length);
+    view.dispatch({ selection: { anchor }, scrollIntoView: true });
+    view.focus();
+  }, []);
+  const jumpTo = (file: string, line: number, column?: number) => {
+    setPhonePane("editor");
+    if (file === workspace.activeFile) {
+      moveCursor(line, column);
+      return;
+    }
+    pendingJump.current = { line, column };
+    updateWorkspace((current) => ({ ...current, activeFile: file }));
+  };
+  // The editor's own effect has swapped in the new file's text by the time this runs.
+  useEffect(() => {
+    const jump = pendingJump.current;
+    if (!jump) return;
+    pendingJump.current = null;
+    moveCursor(jump.line, jump.column);
+  }, [moveCursor, workspace.activeFile]);
+
+  /** For the key bar: runs an editor command or types text, keeping the keyboard up. */
+  const editorKey = (action: (view: EditorView) => unknown) => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+    action(view);
+    view.focus();
+  };
+
   const newProject = () => {
     setWorkspace(createDefaultWorkspace(workspace.project.flavor));
-    setResult(null);
+    clearOutput();
     setLibraryOpen(false);
     setNotice("Started a new local workspace.");
   };
@@ -961,7 +1088,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     try {
       const project = await loadGistProject(id);
       setWorkspace(workspaceFromProject(project));
-      setResult(null);
+      clearOutput();
       setLibraryOpen(false);
       window.history.replaceState(null, "", gistHash(id));
       setNotice("Opened the gist. This page's address now links to it.");
@@ -974,7 +1101,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const openProject = (project: StoredWorkspaceProject) => {
     setWorkspace(project.workspace);
     setLibraryOpen(false);
-    setResult(null);
+    clearOutput();
     setNotice(`Opened ${project.name}.`);
   };
 
@@ -1045,7 +1172,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         return;
       }
       setWorkspace(imported.workspace);
-      setResult(null);
+      clearOutput();
       await refreshProjects();
       setNotice(`Imported ${imported.name}.`);
     } catch (error) {
@@ -1055,6 +1182,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
 
   const statusKind = isRunning ? "running" : result ? result.status : "idle";
   const filePaths = Object.keys(workspace.project.files);
+  const projectFiles = new Set(filePaths);
   const activeNamedProject = projects.find((project) => project.id === workspace.activeProjectId);
 
   // Shared by the desktop toolbar and the compact bar and menu; only one layout renders.
@@ -1099,6 +1227,25 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         </option>
       ))}
     </>
+  );
+
+  const compareSelect = (
+    <select
+      value={compareWith ?? ""}
+      onChange={(event) => {
+        setCompareFlavor((event.target.value || null) as RuntimeFlavor | null);
+        setCompareResult(null);
+      }}
+    >
+      <option value="">Off</option>
+      {runtimeOptions
+        .filter((runtime) => runtime.value !== workspace.project.flavor)
+        .map((runtime) => (
+          <option key={runtime.value} value={runtime.value}>
+            {runtime.label}
+          </option>
+        ))}
+    </select>
   );
 
   const typeModeSelect = (
@@ -1198,6 +1345,11 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
             {runtimeSelect}
           </label>
 
+          <label className="control control-compare" title="Run the code on a second runtime too, and show both outputs">
+            <span>Compare</span>
+            {compareSelect}
+          </label>
+
           {!isEmbed && (
             <div className="project-toolbar-actions">
               <button
@@ -1269,7 +1421,16 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         </div>
         )}
 
-        {notice && <div className="notice" role="status">{notice}</div>}
+        {notice && (
+          <div className="notice" role="status">
+            {notice}
+            {undoable?.notice === notice && (
+              <button className="button notice-action" type="button" onClick={undoLast}>
+                <Undo2 size={15} /> Undo
+              </button>
+            )}
+          </div>
+        )}
 
         {!isEmbed && (
           <input
@@ -1314,6 +1475,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                   {typeModeSelect}
                 </label>
               )}
+              {saveState && <SaveStatus state={saveState} />}
               <button className="icon-button text-icon" type="button" onClick={() => void formatActiveFile()} disabled={isFormatting || !editorReady} title="Format file (Shift+Alt+F)" aria-label="Format file">
                 <WandSparkles size={16} />
               </button>
@@ -1344,13 +1506,13 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                   ))}
                 </div>
                 <div className="file-actions" aria-label="Active file actions">
-                  <button className="file-action" type="button" onClick={setActiveEntry} disabled={workspace.activeFile === workspace.project.entry}>Set entry</button>
+                  <button className="file-action" type="button" onClick={setActiveEntry} disabled={workspace.activeFile === workspace.project.entry || !isSourcePath(workspace.activeFile)}>Set entry</button>
                   <button className="file-action" type="button" onClick={renameActiveFile}><Pencil size={14} /> Rename</button>
                   <button className="file-action danger" type="button" onClick={deleteActiveFile} disabled={workspace.activeFile === workspace.project.entry || filePaths.length === 1}><Trash2 size={14} /> Delete</button>
                 </div>
               </nav>
               )}
-              <div className="editor-host">
+              <div className="editor-host" style={{ "--editor-font-size": `${editorOptions.fontSize}px` } as CSSProperties}>
                 {editorReady ? (
                   <CodeMirror
                     ref={editorRef}
@@ -1365,6 +1527,25 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                   <div className="editor-placeholder" aria-hidden="true" />
                 )}
               </div>
+              {compact && coarse && editorReady && (
+                // pointerdown is cancelled so the editor keeps focus and the keyboard stays open.
+                <div className="key-bar" role="toolbar" aria-label="Editing keys" onPointerDown={(event) => event.preventDefault()}>
+                  <button type="button" onClick={() => editorKey(undo)} aria-label="Undo"><Undo2 size={17} /></button>
+                  <button type="button" onClick={() => editorKey(redo)} aria-label="Redo"><Redo2 size={17} /></button>
+                  <button type="button" onClick={() => editorKey(indentLess)} aria-label="Outdent"><IndentDecrease size={17} /></button>
+                  <button type="button" onClick={() => editorKey(indentMore)} aria-label="Indent"><IndentIncrease size={17} /></button>
+                  {KEY_BAR_CHARACTERS.map((character) => (
+                    <button
+                      key={character}
+                      type="button"
+                      className="key-bar-char"
+                      onClick={() => editorKey((view) => view.dispatch(view.state.replaceSelection(character), { userEvent: "input.type" }))}
+                    >
+                      {character}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
@@ -1384,7 +1565,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                 <span className="output-meta" aria-live="polite">
                   {showBytecode
                     ? formatBytecodeMeta(bytecode)
-                    : isRunning ? "running..." : result ? formatRunMeta(result) : "Ready"}
+                    : isRunning ? "running..." : compareResult && result ? `${runtimeLabel(result.flavor)} vs ${runtimeLabel(compareResult.flavor)}` : result ? formatRunMeta(result) : compareWith ? `Runs on ${runtimeLabel(workspace.project.flavor)} and ${runtimeLabel(compareWith)}` : "Ready"}
                 </span>
               </div>
               {!showBytecode && (
@@ -1404,7 +1585,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                 {copiedOutput ? <Check size={16} /> : <Copy size={16} />}
               </button>
               {!showBytecode && (
-                <button className="icon-button text-icon output-clear" type="button" onClick={() => setResult(null)} title="Clear output" aria-label="Clear output"><Trash2 size={16} /></button>
+                <button className="icon-button text-icon output-clear" type="button" onClick={clearOutput} title="Clear output" aria-label="Clear output"><Trash2 size={16} /></button>
               )}
             </div>
             {showBytecode ? (
@@ -1462,7 +1643,11 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
               /* Keyed by run, not by message: the pending, streamed, and final
                  results share an id, so the stream mounts once per run and replays
                  its enter animation only when a new run starts. */
-              <OutputView key={result?.id ?? "empty"} chunks={result?.chunks ?? []} isRunning={isRunning} />
+              compareResult && result ? (
+                <CompareView runs={[result, compareResult]} isRunning={isRunning} files={projectFiles} onJump={jumpTo} />
+              ) : (
+                <OutputView key={result?.id ?? "empty"} chunks={result?.chunks ?? []} isRunning={isRunning} files={projectFiles} onJump={jumpTo} />
+              )
             )}
             {!showBytecode && inputOpen && (
               <section className="input-drawer" aria-label="Preset standard input">
@@ -1483,6 +1668,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
           >
             <div className="compact-menu-header">
               <strong id="compact-menu-title">Menu</strong>
+              {saveState && <SaveStatus state={saveState} />}
               <button className="icon-button text-icon" type="button" onClick={closeMenu} aria-label="Close menu">
                 <X size={18} />
               </button>
@@ -1534,6 +1720,31 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
               >
                 <Timer size={16} /> Time limit per run: {longRuns ? "30 seconds" : "5 seconds"}
               </button>
+              <label className="menu-field">
+                <span>Compare with</span>
+                {compareSelect}
+              </label>
+              <label className="menu-field">
+                <span>Text size</span>
+                <select
+                  value={editorOptions.fontSize}
+                  onChange={(event) => setEditorOptions((current) => ({ ...current, fontSize: Number(event.target.value) }))}
+                >
+                  {EDITOR_FONT_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size} px
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className={editorOptions.wrap ? "button button-toggle is-on" : "button button-toggle"}
+                type="button"
+                aria-pressed={editorOptions.wrap}
+                onClick={() => setEditorOptions((current) => ({ ...current, wrap: !current.wrap }))}
+              >
+                <WrapText size={16} /> Wrap long lines: {editorOptions.wrap ? "on" : "off"}
+              </button>
               {isLuau && (
                 <label className="menu-field">
                   <span>Type checking</span>
@@ -1551,7 +1762,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                 <button className="button" type="button" onClick={fromMenu(renameActiveFile)}>
                   <Pencil size={16} /> Rename {workspace.activeFile}
                 </button>
-                <button className="button" type="button" onClick={fromMenu(setActiveEntry)} disabled={workspace.activeFile === workspace.project.entry}>
+                <button className="button" type="button" onClick={fromMenu(setActiveEntry)} disabled={workspace.activeFile === workspace.project.entry || !isSourcePath(workspace.activeFile)}>
                   <Play size={16} /> Start runs from {workspace.activeFile}
                 </button>
                 <button
@@ -1648,7 +1859,32 @@ function ProjectLibrary({ projects, activeProjectId, activeName, onClose, onNew,
   );
 }
 
-function OutputView({ chunks, isRunning }: { chunks: OutputChunk[]; isRunning: boolean }) {
+interface OutputViewProps {
+  chunks: OutputChunk[];
+  isRunning: boolean;
+  /** Project paths, so `main.lua:3` in an error links to that line. */
+  files: ReadonlySet<string>;
+  onJump: (file: string, line: number, column?: number) => void;
+}
+
+function OutputLine({ text, files, onJump }: { text: string; files: ReadonlySet<string>; onJump: OutputViewProps["onJump"] }) {
+  return linkLocations(text, files).map((part, index) =>
+    typeof part === "string" ? (
+      part
+    ) : (
+      <button key={index} type="button" className="output-link" onClick={() => onJump(part.file, part.line, part.column)} title={`Open ${part.file} at line ${part.line}`}>
+        {part.text}
+      </button>
+    )
+  );
+}
+
+function SaveStatus({ state }: { state: SaveState }) {
+  const label = { saving: "Saving…", saved: "Saved in this browser", failed: "Not saved", memory: "Not saved: storage is off" }[state];
+  return <span className={`save-status is-${state}`} role="status">{label}</span>;
+}
+
+function OutputView({ chunks, isRunning, files, onJump }: OutputViewProps) {
   const streamRef = useRef<HTMLPreElement>(null);
   const pinnedRef = useRef(true);
 
@@ -1669,7 +1905,41 @@ function OutputView({ chunks, isRunning }: { chunks: OutputChunk[]; isRunning: b
     pinnedRef.current = scrollHeight - scrollTop - clientHeight < 24;
   };
 
-  return <pre className="output-stream" ref={streamRef} onScroll={trackPin}>{chunks.map((chunk, index) => <span className={`output-line output-${chunk.kind}`} key={`${chunk.kind}-${index}`}>{chunk.text}{"\n"}</span>)}</pre>;
+  // Only errors and Check results carry locations worth linking; plain output stays plain text.
+  return <pre className="output-stream" ref={streamRef} onScroll={trackPin}>{chunks.map((chunk, index) => <span className={`output-line output-${chunk.kind}`} key={`${chunk.kind}-${index}`}>{chunk.kind === "stderr" ? <OutputLine text={chunk.text} files={files} onJump={onJump} /> : chunk.text}{"\n"}</span>)}</pre>;
+}
+
+/** What a run printed, for copying and for comparing runs. */
+function outputText(run: RunResult | null): string {
+  return (run?.chunks ?? []).map((chunk) => chunk.text).join("\n");
+}
+
+/** Status lines differ between runtimes ("Running...", timings), so only program output counts. */
+function programOutput(run: RunResult): string {
+  return run.chunks.filter((chunk) => chunk.kind !== "system").map((chunk) => `${chunk.kind}:${chunk.text}`).join("\n");
+}
+
+function CompareView({ runs, isRunning, files, onJump }: { runs: [RunResult, RunResult] } & Omit<OutputViewProps, "chunks">) {
+  const same = programOutput(runs[0]) === programOutput(runs[1]);
+  return (
+    <div className="compare-output">
+      {!isRunning && (
+        <p className={same ? "compare-verdict is-same" : "compare-verdict"} role="status">
+          {same ? "Same output on both runtimes." : "The outputs differ."}
+        </p>
+      )}
+      {runs.map((run, index) => (
+        <section className="compare-run" key={index} aria-label={`${runtimeLabel(run.flavor)} output`}>
+          <h3>
+            <span className={`status-dot status-${isRunning ? "running" : run.status}`} aria-hidden="true" />
+            {runtimeLabel(run.flavor)}
+            <span>{isRunning ? "running..." : formatRunMeta(run)}</span>
+          </h3>
+          <OutputView key={run.id} chunks={run.chunks} isRunning={isRunning} files={files} onJump={onJump} />
+        </section>
+      ))}
+    </div>
+  );
 }
 
 function BytecodeView({ state }: { state: BytecodeState | null }) {

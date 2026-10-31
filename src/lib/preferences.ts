@@ -67,3 +67,38 @@ export function storeBytecodeOptions(options: BytecodeOptions): void {
     // As above: the choice lasts until the page closes.
   }
 }
+
+const EDITOR_OPTIONS_KEY = "weblua:editor-options";
+
+export interface EditorOptions {
+  /** CSS pixels. */
+  fontSize: number;
+  /** Wrap long lines instead of scrolling sideways. */
+  wrap: boolean;
+}
+
+export const EDITOR_FONT_SIZES = [12, 13.5, 15, 17, 19];
+
+export const DEFAULT_EDITOR_OPTIONS: EditorOptions = { fontSize: 13.5, wrap: false };
+
+export function readEditorOptions(): EditorOptions {
+  try {
+    const stored: unknown = JSON.parse(window.localStorage.getItem(EDITOR_OPTIONS_KEY) ?? "null");
+    if (typeof stored !== "object" || stored === null) return DEFAULT_EDITOR_OPTIONS;
+    const { fontSize, wrap } = stored as Record<string, unknown>;
+    return {
+      fontSize: EDITOR_FONT_SIZES.includes(fontSize as number) ? (fontSize as number) : DEFAULT_EDITOR_OPTIONS.fontSize,
+      wrap: typeof wrap === "boolean" ? wrap : DEFAULT_EDITOR_OPTIONS.wrap
+    };
+  } catch {
+    return DEFAULT_EDITOR_OPTIONS;
+  }
+}
+
+export function storeEditorOptions(options: EditorOptions): void {
+  try {
+    window.localStorage.setItem(EDITOR_OPTIONS_KEY, JSON.stringify(options));
+  } catch {
+    // As above.
+  }
+}

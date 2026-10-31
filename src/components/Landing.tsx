@@ -197,7 +197,7 @@ const FEATURES = [
   {
     icon: Braces,
     title: "Lua 5.1–5.5 and Luau",
-    body: "Choose Lua 5.1 through 5.5 or the Luau language, with Luau's task library, require-by-string paths, type checking as you type, and a bytecode view. Weblua is not Roblox Studio and does not provide Roblox APIs."
+    body: "Choose Lua 5.1 through 5.5 or the Luau language, and Compare to run the same code on two runtimes side by side. Luau gets its task library, require-by-string paths with .luaurc aliases, type checking as you type, and a bytecode view. Weblua is not Roblox Studio and does not provide Roblox APIs."
   },
   {
     icon: Link,
@@ -291,7 +291,7 @@ const FAQS = [
   },
   {
     q: "Can I use Weblua offline?",
-    a: "Weblua does not currently guarantee offline startup because it has no service worker or complete PWA cache. An already loaded session can run without an execution-server round trip, and browser HTTP caches may help, but reliable offline mode is not implemented."
+    a: "Yes, for what you have used online. A service worker caches each page as you open it and each runtime the first time you run it, so a project that ran once reopens and runs without a connection. Pages and runtimes you have never loaded, and gists, still need one."
   },
   {
     q: "How do embeds work?",
@@ -954,6 +954,11 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
             <a href="/playground">Playground</a>
             <a href="/lua-formatter">Lua formatter</a>
             <a href="/luau-type-checker">Luau type checker</a>
+            <a href="/lua-vs-luau">Lua vs Luau</a>
+            <a href="/lua-pattern-tester">Lua pattern tester</a>
+            <a href="/lua-table-to-json">Lua table to JSON</a>
+            <a href="/examples">Examples</a>
+            <a href="/learn-luau">Learn Luau</a>
             <a href="#features">Features</a>
             <a href="#compare">Compare</a>
             <a href="#access">Access</a>

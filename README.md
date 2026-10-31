@@ -17,9 +17,14 @@ or Studio tooling.
   Lezer grammar; completion and hover docs for the selected runtime's standard
   library, the file's own locals and table fields, Luau types, and `require` paths;
   and StyLua formatting with Shift+Alt+F.
-- Multi-file projects with a selectable entry file.
+- Multi-file projects with a selectable entry file. Files with another extension
+  (`data.json`, `.luaurc`) are project data: saved and shared, never compiled, and
+  readable with `io.open` on Lua 5.4.
 - `require("lib.module")`, `require("lib/module")`, and `init.lua` module aliases.
-  Luau also resolves `./`, `../`, and `@self` paths relative to the requiring module.
+  Luau also resolves `./`, `../`, and `@self` paths relative to the requiring module,
+  and `@alias` paths from `.luaurc` files, for runs and for the type checker.
+- **Compare**: run the same project on a second runtime and see both outputs side by
+  side, with a note when they differ.
 - Luau's `task` library (`spawn`, `defer`, `delay`, `wait`, `cancel`) with real-time waits.
 - A **Check** action that compiles every file without running it and reports
   per-file syntax diagnostics (and, for Luau, type errors and lints).
@@ -28,11 +33,31 @@ or Studio tooling.
 - A Luau bytecode view with optimization and debug levels.
 - Preset stdin through `io.read()` in Lua and `read()` in Luau.
 - Live stdout and stderr, with status and elapsed time after each run finishes.
+  `file:line` locations in errors and Check results link to that line.
 - Source-only share links, GitHub gist links, and lazy-loading iframe embeds.
-- Recovery drafts and named projects stored in IndexedDB.
+- Recovery drafts and named projects stored in IndexedDB, with a save status, and
+  Undo after Start over or deleting a file.
+- On phones: a key bar for undo, redo, indent, and the punctuation phone keyboards
+  hide, plus text size and line-wrap settings.
+- Offline reopening through a service worker, once a page and its runtime have
+  loaded online.
 - Source-only `.weblua.json` import and export.
 - Fifteen built-in examples, including a multi-file capability tour, a Luau `task`
   project, and a Luau project whose module exports types to the file that requires it.
+
+Tool pages open the playground on one job: [`/lua-formatter`](https://weblua.com/lua-formatter),
+[`/luau-type-checker`](https://weblua.com/luau-type-checker),
+[`/luau-bytecode-viewer`](https://weblua.com/luau-bytecode-viewer),
+[`/lua`](https://weblua.com/lua), [`/luau`](https://weblua.com/luau), and the side-by-side
+comparisons [`/lua-vs-luau`](https://weblua.com/lua-vs-luau) and
+[`/lua-5-1-vs-5-4`](https://weblua.com/lua-5-1-vs-5-4). Two small tools have their own
+UI: a [pattern tester](https://weblua.com/lua-pattern-tester) that highlights every
+match and capture on the runtime you pick, and a
+[Lua table to JSON converter](https://weblua.com/lua-table-to-json) that works both ways.
+[`/examples`](https://weblua.com/examples) holds runnable examples with their output on
+Lua 5.1, 5.4, and Luau, and [`/learn-luau`](https://weblua.com/learn-luau) five short
+lessons that end in an exercise checked in the page. Every example's printed output
+and every exercise is pinned by `src/workers/articles.execution.test.ts`.
 
 ## Try the capability tour
 
@@ -51,12 +76,15 @@ and can be loaded with the playground's Import project button.
 ## Project execution model
 
 Projects contain a runtime flavor, an entry path, and a map of normalized relative
-source paths. Lua 5.4 mounts those files into Wasmoon's virtual filesystem. Lua
-5.1–5.3 and 5.5 register the same paths through `package.preload`. Luau compiles every file
-and resolves modules through an in-VM browser-safe loader. That loader follows Luau's
-require-by-string rules: `./` and `../` resolve against the requiring module's folder
-(for an `init.luau`, the folder that contains it), `@self/` against the module itself,
-and other `@` aliases report an error. Luau's entry module runs as the main thread of an
+paths. Lua 5.4 mounts those files into Wasmoon's virtual filesystem and runs from the
+project folder, so chunk names, error messages, and `io.open` use project paths. Lua
+5.1–5.3 and 5.5 register the same paths through `package.preload`. Luau compiles every
+source file and resolves modules through an in-VM browser-safe loader. That loader
+follows Luau's require-by-string rules: `./` and `../` resolve against the requiring
+module's folder (for an `init.luau`, the folder that contains it), `@self/` against the
+module itself, and any other `@alias` through the nearest `.luaurc` in the requiring
+file's folder or above it. Alias paths are relative to their `.luaurc`; one that is not
+JSON fails the run and shows up in Check. Luau's entry module runs as the main thread of an
 in-VM `task` scheduler, so top-level code can `task.wait`; the run ends when no task is
 left waiting. An error in the main thread fails the run, while an error in any other
 task is printed to stderr and the remaining tasks keep running.
@@ -177,7 +205,11 @@ IndexedDB is unavailable, the editor falls back to non-persistent in-memory stor
 - Formatting loads StyLua's WebAssembly build (about 0.9 MB compressed) on first use.
   StyLua has no Lua 5.5 mode, so Lua 5.5 files are formatted as Lua 5.4 and code using
   5.5-only syntax such as `global` reports a notice instead.
-- The virtual project filesystem only contains the source files supplied to the run.
+- The virtual project filesystem only contains the files supplied to the run, and
+  only Lua 5.4 exposes it to `io.open`.
+- `print` stringifies in the VM, as the real one does, so Lua 5.4 prints `3.0` and
+  `-0.0` and tables print as addresses. Uncaught and caught errors name project
+  files (`main.lua:3:`), as the real interpreters do.
 - Lua 5.4's `io.read` override and Luau's `read` helper support `*l`, `*L`, and
   `*a`. Lua 5.1–5.3 and 5.5 receive the preset input through their standard byte-stream stdin.
 
@@ -210,9 +242,10 @@ Workers, and modern URL APIs. Project sharing additionally needs
 `CompressionStream`/`DecompressionStream`; persistence needs IndexedDB; copying links
 and embeds needs the Clipboard API.
 
-There is currently no service worker, so reliable offline startup is not guaranteed.
-An already loaded session can execute without an execution-server round trip, but
-Weblua should not yet be described as a complete offline PWA.
+A service worker caches each page and hashed asset as it loads, and each runtime
+the first time a run fetches it. A page you have opened online, with a runtime you
+have run, reopens and runs offline. Pages and runtimes you have never loaded need a
+connection, and the GitHub gist loader always does.
 
 ## Run locally
 

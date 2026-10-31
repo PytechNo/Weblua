@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildModuleAliases, resolveLuauRequire } from "./moduleAliases";
+import { buildModuleAliases, readLuaurcAliases, resolveLuauRequire } from "./moduleAliases";
 
 describe("resolveLuauRequire", () => {
   const files = {
@@ -52,5 +52,47 @@ describe("resolveLuauRequire", () => {
   it("ignores inherited object keys", () => {
     expect(resolve("main.luau", "constructor")).toBeUndefined();
     expect(resolve("main.luau", "toString")).toBeUndefined();
+  });
+});
+
+describe(".luaurc aliases", () => {
+  const files = {
+    ".luaurc": JSON.stringify({ aliases: { Shared: "./lib/shared", Root: "." } }),
+    "game/.luaurc": JSON.stringify({ aliases: { shared: "../vendor" } }),
+    "game/main.luau": "",
+    "lib/shared/init.luau": "",
+    "lib/shared/math.luau": "",
+    "vendor/init.luau": "",
+    "main.luau": "",
+    "data.json": "{}"
+  };
+  const { aliases: luaurc, errors } = readLuaurcAliases(files);
+  const exists = (path: string) => Object.hasOwn(files, path);
+  const resolve = (from: string, name: string) => resolveLuauRequire(buildModuleAliases(files), exists, from, name, luaurc);
+
+  it("reads aliases relative to each file's folder, with names in any case", () => {
+    expect(errors).toEqual([]);
+    expect(luaurc).toEqual({ "": { shared: "lib/shared", root: "" }, game: { shared: "vendor" } });
+  });
+
+  it("uses the nearest .luaurc that defines the alias", () => {
+    expect(resolve("main.luau", "@shared")).toBe("lib/shared/init.luau");
+    expect(resolve("main.luau", "@SHARED/math")).toBe("lib/shared/math.luau");
+    expect(resolve("game/main.luau", "@shared")).toBe("vendor/init.luau");
+    expect(resolve("game/main.luau", "@root/main")).toBe("main.luau");
+    expect(resolve("main.luau", "@missing/x")).toBeUndefined();
+  });
+
+  it("never treats project data as a module", () => {
+    expect(Object.values(buildModuleAliases(files))).not.toContain("data.json");
+  });
+
+  it("reports a .luaurc that is not JSON or names a path outside the project", () => {
+    expect(readLuaurcAliases({ ".luaurc": "{ aliases: }" }).errors).toEqual([
+      { file: ".luaurc", message: expect.stringMatching(/^is not valid JSON/) }
+    ]);
+    expect(readLuaurcAliases({ "lib/.luaurc": '{"aliases":{"up":"../../x"}}' }).errors).toEqual([
+      { file: "lib/.luaurc", message: 'alias "up" must be a relative path inside the project' }
+    ]);
   });
 });

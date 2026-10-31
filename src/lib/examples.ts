@@ -1,6 +1,6 @@
 import capabilityTourDocument from "../../examples/weblua-capability-tour.weblua.json";
 import { assertProjectPayload, projectFromSnippet } from "./project";
-import type { ToolPage } from "./routes";
+import type { PlaygroundTool } from "./routes";
 import type { PlaygroundExample, ProjectPayload } from "./types";
 
 export const examples: PlaygroundExample[] = [
@@ -320,9 +320,9 @@ export const defaultExample = examples[0];
 
 /**
  * What each tool page opens with. Kept out of `examples`: the type checker's
- * demo has a deliberate type error, and neither belongs in the example picker.
+ * demo has a deliberate type error, and none belongs in the example picker.
  */
-export const toolExamples: Record<ToolPage, PlaygroundExample> = {
+export const toolExamples: Record<PlaygroundTool, PlaygroundExample> = {
   formatter: {
     id: "formatter-demo",
     title: "Unformatted Lua",
@@ -358,8 +358,129 @@ local cart: { Item } = {
 }
 
 print(total(cart))`
+  },
+  bytecode: {
+    id: "bytecode-demo",
+    title: "Luau bytecode",
+    flavor: "luau",
+    code: `-- The Bytecode tab shows what the Luau compiler emits for this file.
+-- Edit the code, or change Optimize and Debug, and the listing follows.
+local function sumSquares(values: { number }): number
+  local total = 0
+  for _, value in values do
+    total += value * value
+  end
+  return total
+end
+
+-- At optimize level 2, the compiler folds this constant expression.
+local seconds = 60 * 60 * 24
+
+print(sumSquares({ 1, 2, 3, 4 }), seconds)`
+  },
+  lua: {
+    id: "lua-demo",
+    title: "Lua playground",
+    flavor: "lua54",
+    code: `-- Write Lua here and press Run (Ctrl+Enter). Pick 5.1 to 5.5 under Runtime.
+local function greet(name)
+  return ("Hello, %s!"):format(name)
+end
+
+print(greet("Lua"))
+print(_VERSION)
+
+local squares = {}
+for i = 1, 5 do
+  squares[#squares + 1] = i * i
+end
+print(table.concat(squares, ", "))`
+  },
+  luau: {
+    id: "luau-demo",
+    title: "Luau playground",
+    flavor: "luau",
+    code: `-- Write Luau here and press Run (Ctrl+Enter). Types are checked as you type.
+local function greet(name: string): string
+  return \`Hello, {name}!\`
+end
+
+print(greet("Luau"))
+
+local squares: { number } = {}
+for i = 1, 5 do
+  table.insert(squares, i * i)
+end
+print(table.concat(squares, ", "))`
+  },
+  "lua-vs-luau": {
+    id: "lua-vs-luau-demo",
+    title: "Lua 5.1 vs Luau",
+    flavor: "lua51",
+    code: `-- Lua 5.1 and Luau run this file side by side. Edit it and press Run.
+-- Luau grew out of Lua 5.1, so plain Lua code mostly behaves the same.
+print("version:", _VERSION)
+
+-- The same on both: tables, closures, metatables, and string patterns.
+local words = {}
+for word in ("the quick brown fox"):gmatch("%a+") do
+  words[#words + 1] = word:upper()
+end
+print(table.concat(words, " "))
+
+-- Luau adds library functions that Lua 5.1 does not have.
+print("string.split:", type(string.split))
+print("table.find:", type(table.find))
+print("math.clamp:", type(math.clamp))
+print("table.unpack:", type(table.unpack))
+
+-- Lua 5.1 can compile code at runtime; Luau scripts cannot.
+print("loadstring:", type(loadstring))
+
+-- Luau also accepts +=, continue, \`{interpolated}\` strings,
+-- if-expressions, and type annotations, which Lua 5.1 rejects.
+-- Uncomment the next line and run again to see Lua 5.1's syntax error:
+-- local total = 1; total += 1; print("total:", total)`
+  },
+  "lua51-vs-lua54": {
+    id: "lua51-vs-lua54-demo",
+    title: "Lua 5.1 vs 5.4",
+    flavor: "lua51",
+    code: `-- Lua 5.1 and Lua 5.4 run this file side by side. Edit it and press Run.
+print("version:", _VERSION)
+
+-- Lua 5.3 added integers. / always gives a float; on 5.4 that prints as 3.0.
+print("7 / 2 =", 7 / 2)
+print("6 / 2 =", 6 / 2)
+print("2^53 =", 2^53)
+print("math.maxinteger:", math.maxinteger)
+
+-- unpack moved into the table library in 5.2, and setfenv gave way to _ENV.
+print("unpack:", type(unpack), "table.unpack:", type(table.unpack))
+print("setfenv:", type(setfenv))
+
+-- 5.3 added the utf8 library.
+print("utf8:", type(utf8))
+
+-- Strings still convert to numbers in arithmetic on both.
+print('"10" + 5 =', "10" + 5)
+
+-- Syntax added after 5.1: goto (5.2), // and bitwise operators (5.3),
+-- and <const> and <close> locals (5.4). Uncomment to see 5.1 reject it:
+-- print(7 // 2, 6 & 3)`
   }
 };
+
+/** The example a `#example=<id>` link names: from the picker, a tool page, or an article. */
+export async function findExample(hash: string): Promise<PlaygroundExample | undefined> {
+  const id = new URLSearchParams(hash.replace(/^#/, "")).get("example");
+  if (!id) return undefined;
+  const builtIn = [...examples, ...Object.values(toolExamples)].find((example) => example.id === id);
+  if (builtIn) return builtIn;
+  // Article text stays out of the playground's chunk until a link asks for it.
+  const { articleExamples } = await import("./articles");
+  return articleExamples().find((example) => example.id === id);
+}
 
 export function projectForExample(example: PlaygroundExample): ProjectPayload {
   return "project" in example

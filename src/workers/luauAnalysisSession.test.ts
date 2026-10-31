@@ -232,6 +232,23 @@ describe("LuauAnalysisSession diagnostics", () => {
     ]);
   });
 
+  it("follows .luaurc aliases and ignores project data", async () => {
+    const diagnostics = await check({
+      ".luaurc": JSON.stringify({ aliases: { util: "lib/util" } }),
+      "data.json": "{ not luau }",
+      "lib/util.luau": "return { value = 1 }",
+      "main.luau": `local util = require("@util")
+local n: string = util.value
+print(n)
+`
+    });
+
+    // The alias resolved, so the checker knows util.value is a number.
+    expect(errorsOnly(diagnostics)).toEqual([
+      expect.objectContaining({ file: "main.luau", line: 2, message: "Expected this to be 'string', but got 'number'" })
+    ]);
+  });
+
   it("reports a require that names no project file", async () => {
     const diagnostics = await check({ "main.luau": `local missing = require("lib.missing")\nprint(missing)\n` });
 

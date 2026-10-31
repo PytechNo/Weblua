@@ -219,24 +219,15 @@ describe("module alias resolution", () => {
 });
 
 describe("generated Lua bootstraps", () => {
-  it("puts the mount root on package.path and redirects standard I/O", () => {
-    const bootstrap = buildLua54Bootstrap("/weblua/run-1");
+  it("searches the project folder and redirects standard I/O", () => {
+    const bootstrap = buildLua54Bootstrap();
 
-    expect(bootstrap).toContain("/weblua/run-1");
-    expect(bootstrap).toContain("?.lua;");
-    expect(bootstrap).toContain("?/init.lua;");
+    expect(bootstrap).toContain('package.path = "?.lua;?/init.lua;"');
     expect(bootstrap).toContain("io.read");
     expect(bootstrap).toContain("__weblua_read");
     expect(bootstrap).toContain("io.write");
     expect(bootstrap).toContain("__weblua_write_stdout");
     expect(bootstrap).toContain("__weblua_file_methods.write");
-  });
-
-  it("rewrites require's loader data so the mount root cannot reach output", () => {
-    const bootstrap = buildLua54Bootstrap("/weblua/run-1");
-
-    expect(bootstrap).toContain("__weblua_prefix");
-    expect(bootstrap).toContain("table.unpack(results, 1, results.n)");
   });
 
   it("preloads every module alias for the static runtimes", () => {
@@ -549,6 +540,7 @@ describe("streaming before user code resumes", () => {
       ...failingDependencies,
       lua54Factory: {
         mountFile: async () => {},
+        getLuaModule: async () => ({ module: { FS: { chdir() {} } } }),
         createEngine: async () => ({
           global: {
             setMemoryMax() {},
@@ -557,7 +549,8 @@ describe("streaming before user code resumes", () => {
           },
           doString: async () => {},
           doFile: async () => {
-            globals.get("print")!("first");
+            // The bootstrap's print writes one line through this sink.
+            globals.get("__weblua_write_stdout")!("first\n");
             snapshots.push(streamed.slice());
             globals.get("warn")!("second");
             // User code could enter an infinite loop at either snapshot.

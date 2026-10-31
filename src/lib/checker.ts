@@ -1,5 +1,6 @@
 import { mergeDiagnostics } from "./diagnostics";
 import { analyzeLuauProject } from "./luauAnalysis";
+import { isSourcePath } from "./project";
 import {
   isRunProgress,
   type CheckResult,
@@ -116,7 +117,7 @@ export async function checkProject(
     return compiled;
   }
 
-  const files = options.typeCheckFile ? [options.typeCheckFile] : Object.keys(project.files);
+  const files = (options.typeCheckFile ? [options.typeCheckFile] : Object.keys(project.files)).filter(isSourcePath);
   const [compileResult, analysis] = await Promise.all([
     compiled,
     analyzeLuauProject(project, typeMode, files, { skipCold: options.background })

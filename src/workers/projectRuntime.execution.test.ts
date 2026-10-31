@@ -279,6 +279,55 @@ describe.each(luaFlavors)("%s end-to-end execution", (flavor) => {
     expect(result.status).toBe("ok");
     expect(stdoutOf(result)).toEqual(["prefix 42 suffix!", "file"]);
   });
+
+  it("prints values as the interpreter's tostring does", async () => {
+    const result = await run({
+      flavor,
+      entry: "main.lua",
+      files: {
+        "main.lua": `
+          print(3 / 1, -0.0, math.huge, setmetatable({}, { __tostring = function() return "custom" end }))
+          print({})
+        `
+      }
+    });
+
+    const floats = flavor === "lua51" || flavor === "lua52" ? "3\t-0" : "3.0\t-0.0";
+    expect(stdoutOf(result)[0]).toBe(`${floats}\tinf\tcustom`);
+    expect(stdoutOf(result)[1]).toMatch(/^table: /);
+  });
+
+  it("runs and checks a project that holds data files, without compiling them", async () => {
+    const project: ProjectPayload = {
+      flavor,
+      entry: "main.lua",
+      files: { "data.json": `{ "not": lua }`, "notes.txt": "plain text", "main.lua": `print("ran")` }
+    };
+
+    expect(stdoutOf(await run(project))).toEqual(["ran"]);
+    expect((await check(project)).diagnostics).toEqual([]);
+  });
+
+  it("names project files in caught errors and reads project files relative to the project", async () => {
+    const result = await run({
+      flavor,
+      entry: "main.lua",
+      files: {
+        "lib/fail.lua": `return function() error("inner") end`,
+        "main.lua": `
+          print(pcall(require("lib.fail")))
+          local file = io.open("lib/fail.lua")
+          print(file ~= nil and file:read("*l"))
+        `
+      }
+    });
+
+    expect(stdoutOf(result)).toEqual([
+      "false	lib/fail.lua:1: inner",
+      // Only Lua 5.4 runs on a file system holding the project; the others load sources from memory.
+      flavor === "lua54" ? 'return function() error("inner") end' : "false"
+    ]);
+  });
 });
 
 /**
@@ -562,7 +611,8 @@ describe("the shipped capability tour example", () => {
       "module cache loads:\t1",
       "numbers:\t4, 8, 15, 16, 23, 42",
       "sum:\t108",
-      "average x multiplier:\t54",
+      // 108 / 6 is a float in Lua 5.4, as in the real interpreter.
+      "average x multiplier:\t54.0",
       "notes:",
       "first note",
       "second note",

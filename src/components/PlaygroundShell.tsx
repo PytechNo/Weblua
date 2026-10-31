@@ -27,14 +27,15 @@ interface PlaygroundShellProps {
 }
 
 const PLAYGROUND_PAGE = {
-  title: "Online Luau & Lua Editor",
-  aboutTitle: "Online Luau compiler and Lua interpreter",
+  title: "Online Lua & Luau Compiler",
+  aboutTitle: "Online Lua compiler, interpreter, and editor",
   about: (
     <>
       <p>
-        Weblua is a free online Luau and Lua editor. Pick a runtime, Luau or Lua 5.1, 5.2, 5.3,
-        5.4, or 5.5, and press Run. Each run happens in a Web Worker in your browser through
-        WebAssembly, so there is no execution server, nothing to install, and no account.
+        Weblua is a free online Lua compiler and Luau editor. Pick a runtime, Luau or Lua 5.1,
+        5.2, 5.3, 5.4, or 5.5, and press Run. Each run happens in a Web Worker in your browser
+        through WebAssembly, so there is no execution server, nothing to install, and no account.
+        Compare runs the same code on a second runtime and shows both outputs side by side.
       </p>
       <p>
         The editor runs Luau's <a href="/luau-type-checker">type checker</a> as you type, in
@@ -96,6 +97,168 @@ const TOOL_PAGES: Record<ToolPage, typeof PLAYGROUND_PAGE> = {
           A type error doesn't stop a run: press Run to see what the code does anyway. Code on this
           page isn't saved between visits; use the <a href="/playground">playground</a> to keep a
           draft. To tidy the code, try the <a href="/lua-formatter">Lua &amp; Luau formatter</a>.
+        </p>
+      </>
+    )
+  },
+  bytecode: {
+    title: "Luau Bytecode Viewer",
+    aboutTitle: "See the bytecode Luau compiles your code to",
+    about: (
+      <>
+        <p>
+          The Bytecode tab lists the instructions Luau's own compiler emits for the open file, and
+          updates as you type. Each instruction sits under the source line it came from, with the
+          compiler's remarks on inlining and constant folding.
+        </p>
+        <p>
+          Optimize sets the level from 0 to 2: level 2 inlines small local functions and unrolls
+          short loops. Debug 0 strips line info and names, 2 keeps local names. A --!optimize comment
+          at the top of a file sets the level for runs as well as the listing.
+        </p>
+        <p>
+          The compiler runs as WebAssembly in your browser, about 0.8 MB on first use. Code on this
+          page isn't saved between visits; the <a href="/playground">playground</a> keeps a draft
+          and has the same tab. To check types as well, try the{" "}
+          <a href="/luau-type-checker">Luau type checker</a>.
+        </p>
+      </>
+    )
+  },
+  lua: {
+    title: "Lua Playground",
+    aboutTitle: "Run Lua 5.1 to 5.5 online",
+    about: (
+      <>
+        <p>
+          Write Lua and press Run, or Ctrl+Enter. The Runtime menu switches between the official
+          Lua 5.1, 5.2, 5.3, 5.4, and 5.5 interpreters, compiled to WebAssembly, so the output is
+          what that version prints, down to 3 versus 3.0.
+        </p>
+        <p>
+          A project can have several files joined with require, read preset input through
+          io.read, and be shared as a link. Compare runs the code on two versions side by side;
+          see <a href="/lua-5-1-vs-5-4">Lua 5.1 vs 5.4</a> for what changed between them.
+        </p>
+        <p>
+          Code here isn't saved between visits; the <a href="/playground">playground</a> keeps a
+          draft and named projects. New to the language? The{" "}
+          <a href="/examples">runnable examples</a> cover strings, tables, and metatables.
+        </p>
+      </>
+    )
+  },
+  luau: {
+    title: "Luau Playground",
+    aboutTitle: "Run Luau online, with type checking",
+    about: (
+      <>
+        <p>
+          Write Luau, the language Roblox scripts are written in, and press Run. Luau's own
+          compiler and type checker run as WebAssembly in your browser, so errors are underlined as
+          you type and nothing is sent to a server.
+        </p>
+        <p>
+          Types, string interpolation, compound assignment, generics, and the task library all
+          work. Roblox services and instances don't: this is the Luau language, not Roblox
+          Studio. <a href="/lua-vs-luau">Lua vs Luau</a> shows where Luau differs from Lua 5.1.
+        </p>
+        <p>
+          Code here isn't saved between visits; the <a href="/playground">playground</a> keeps a
+          draft. To learn the language, start with the <a href="/learn-luau">Luau lessons</a>.
+        </p>
+      </>
+    )
+  },
+  "lua-vs-luau": {
+    title: "Lua vs Luau",
+    aboutTitle: "Lua 5.1 and Luau, run side by side",
+    about: (
+      <>
+        <p>
+          Luau started as Lua 5.1 and is still close to it: the same tables, closures, metatables,
+          and string patterns. Press Run and the code runs on both Lua 5.1 and Luau, with the two
+          outputs side by side and a note when they differ.
+        </p>
+        <p>
+          Luau adds syntax that Lua 5.1 rejects: type annotations, +=, continue, string
+          interpolation, and if-expressions. It adds library functions such as string.split,
+          table.find, and math.clamp, and takes loadstring away from scripts. Its compiler and
+          type checker are built for large codebases, catching mistakes before a run.
+        </p>
+        <p>
+          Change either side under Runtime and Compare. For the Lua side of the family, see{" "}
+          <a href="/lua-5-1-vs-5-4">Lua 5.1 vs 5.4</a>, or start in the{" "}
+          <a href="/luau">Luau playground</a>.
+        </p>
+      </>
+    )
+  },
+  "lua51-vs-lua54": {
+    title: "Lua 5.1 vs 5.4",
+    aboutTitle: "Lua 5.1 and Lua 5.4, run side by side",
+    about: (
+      <>
+        <p>
+          Press Run and the code runs on the real Lua 5.1 and Lua 5.4 interpreters, with the two
+          outputs side by side. Edit the code to test what worries you before an upgrade, or before
+          you pick a version to embed.
+        </p>
+        <p>
+          The changes that break the most code: 5.3 added integers, so 6 / 2 prints 3.0; unpack
+          moved to table.unpack and setfenv gave way to _ENV in 5.2. New syntax includes goto
+          (5.2), // and bitwise operators (5.3), and &lt;const&gt; and &lt;close&gt; locals (5.4).
+        </p>
+        <p>
+          Lua 5.2, 5.3, and 5.5 are under Runtime and Compare too. LuaJIT follows 5.1, so the 5.1
+          side is a fair guide for it. To compare with Roblox's language, see{" "}
+          <a href="/lua-vs-luau">Lua vs Luau</a>.
+        </p>
+      </>
+    )
+  },
+  "pattern-tester": {
+    title: "Lua Pattern Tester",
+    aboutTitle: "Test Lua patterns online",
+    about: (
+      <>
+        <p>
+          Type a pattern and some text. Every match is highlighted as string.gmatch finds it, with
+          its position and captures; the first match is what string.find and string.match return.
+          Add a replacement to see string.gsub's result.
+        </p>
+        <p>
+          The pattern runs on the real runtime you pick, from Lua 5.1 to 5.5 or Luau, because the
+          versions differ at the edges: since 5.3, gmatch skips an empty match right after another
+          match. Lua patterns are not regular expressions: % escapes, there is no |, and quantifiers
+          apply to one character or class, such as %d or [%w_].
+        </p>
+        <p>
+          Positions count bytes, as Lua does, so a UTF-8 character can take two to four. To use
+          the pattern in a program, copy it into the <a href="/playground">playground</a>.
+        </p>
+      </>
+    )
+  },
+  "table-to-json": {
+    title: "Lua Table to JSON",
+    aboutTitle: "Convert a Lua table to JSON, and JSON to a Lua table",
+    about: (
+      <>
+        <p>
+          Paste a Lua table constructor and get JSON. Lua 5.4 evaluates it in your browser, so
+          expressions, nested tables, and a chunk that returns a table all work. Switch the
+          direction to turn JSON into a Lua table literal.
+        </p>
+        <p>
+          A table with keys 1 to n becomes a JSON array, any other table an object with sorted
+          keys, and an empty table []. Number keys in an object become strings. Functions, NaN,
+          infinity, and tables that contain themselves have no JSON form, so they are reported as
+          errors. JSON null becomes nil.
+        </p>
+        <p>
+          Nothing is uploaded. To keep working with the table, open the{" "}
+          <a href="/playground">playground</a>.
         </p>
       </>
     )

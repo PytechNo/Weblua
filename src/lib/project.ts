@@ -41,6 +41,28 @@ export function isRuntimeFlavor(value: unknown): value is RuntimeFlavor {
   return typeof value === "string" && runtimeFlavorSet.has(value);
 }
 
+/** Every runtime, in menu order, with the name the UI shows for it. */
+export const runtimeOptions: Array<{ value: RuntimeFlavor; label: string }> = [
+  { value: "lua51", label: "Lua 5.1" },
+  { value: "lua52", label: "Lua 5.2" },
+  { value: "lua53", label: "Lua 5.3" },
+  { value: "lua54", label: "Lua 5.4" },
+  { value: "lua55", label: "Lua 5.5" },
+  { value: "luau", label: "Luau" }
+];
+
+/**
+ * Lua or Luau source, which runs and checks compile. A file with any other
+ * extension (data.json, .luaurc) is project data: it is shared and saved with
+ * the project, and Lua 5.4 can read it with io.open, but nothing compiles it.
+ * A name without an extension stays source, as it always was.
+ */
+export function isSourcePath(path: string): boolean {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  return dot === -1 || /^\.luau?$/i.test(name.slice(dot));
+}
+
 /** File extension used when the workspace creates a new source file. */
 export function runtimeFileExtension(flavor: RuntimeFlavor): ".lua" | ".luau" {
   return flavor === "luau" ? ".luau" : ".lua";

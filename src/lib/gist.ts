@@ -134,14 +134,15 @@ export function projectFromGistFiles(files: unknown): ProjectPayload {
   const flavor = sources.some(([name]) => /\.luau$/i.test(name)) ? "luau" : DEFAULT_LUA_FLAVOR;
   const sourceFiles: Record<string, string> = {};
   let bytes = 0;
-  for (const [name, file] of sources) {
+  // A .luaurc comes along, so @aliases in the gist's code resolve.
+  for (const [name, file] of [...sources, ...entries.filter(([name]) => name === ".luaurc")]) {
     sourceFiles[name] = contentOf(name, file);
     bytes += new TextEncoder().encode(sourceFiles[name]).length;
   }
   if (bytes > MAX_SHARE_DECOMPRESSED_BYTES) throw new GistLoadError("The gist's source files are too large to open.");
 
   try {
-    return assertProjectPayload({ flavor, entry: entryFor(Object.keys(sourceFiles)), files: sourceFiles });
+    return assertProjectPayload({ flavor, entry: entryFor(sources.map(([name]) => name)), files: sourceFiles });
   } catch (error) {
     throw new GistLoadError(error instanceof ProjectValidationError ? error.message : "The gist is not a valid project.");
   }

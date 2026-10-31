@@ -1,6 +1,7 @@
 import type { LuaFactory } from "wasmoon";
 import { parseCompileError } from "../lib/diagnostics";
-import { buildModuleAliases } from "../lib/moduleAliases";
+import { buildModuleAliases, type LuaurcAliases, readLuaurcAliases } from "../lib/moduleAliases";
+import { isSourcePath } from "../lib/project";
 import { DEFAULT_RUN_TIMEOUT_MS } from "../lib/types";
 import type {
   CheckResult,
@@ -261,6 +262,9 @@ export function validateProject(project: ProjectPayload): ProjectPayload {
   if (!Object.hasOwn(files, project.entry)) {
     throw new Error(`The entry file ${project.entry} does not exist.`);
   }
+  if (!isSourcePath(project.entry)) {
+    throw new Error(`The entry file ${project.entry} is not a .lua or .luau file.`);
+  }
 
   return {
     flavor: project.flavor,
@@ -333,7 +337,7 @@ async function checkLua54(project: ProjectPayload, deps: RuntimeDependencies): P
   const diagnostics: Diagnostic[] = [];
 
   try {
-    for (const [path, source] of projectEntries(project)) {
+    for (const [path, source] of sourceEntries(project)) {
       try {
         engine.global.loadString(source, path);
       } catch (error) {
@@ -363,9 +367,6 @@ async function runLua54(
 
   try {
     engine.global.setMemoryMax(LUA_MEMORY_LIMIT);
-    engine.global.set("print", (...args: unknown[]) => {
-      stdout.write(`${args.map(formatValue).join("\t")}\n`);
-    });
     engine.global.set("warn", (...args: unknown[]) => {
       stderr.write(`${args.map(formatValue).join("\t")}\n`);
     });
@@ -385,10 +386,13 @@ async function runLua54(
     for (const [path, source] of projectEntries(request.project)) {
       await deps.lua54Factory.mountFile(`${root}/${path}`, source);
     }
+    // Run from the project folder, as `lua main.lua` would: chunk names, and so
+    // error messages and tracebacks, name project paths, never the mount root.
+    (await deps.lua54Factory.getLuaModule()).module.FS.chdir(root);
 
     observer?.executing?.();
-    await engine.doString(buildLua54Bootstrap(root));
-    await engine.doFile(`${root}/${request.project.entry}`);
+    await engine.doString(buildLua54Bootstrap());
+    await engine.doFile(request.project.entry);
   } finally {
     stdout.flush();
     stderr.flush();
@@ -396,11 +400,10 @@ async function runLua54(
   }
 }
 
-export function buildLua54Bootstrap(root: string): string {
-  const rootLiteral = luaLongString(root);
+export function buildLua54Bootstrap(): string {
   return `
-    local __weblua_root = ${rootLiteral}
-    package.path = __weblua_root .. "/?.lua;" .. __weblua_root .. "/?/init.lua;" .. package.path
+    -- Relative to the project folder, which runLua54 makes the working directory.
+    package.path = "?.lua;?/init.lua;" .. package.path
     io.read = function(format)
       return __weblua_read(format)
     end
@@ -420,6 +423,17 @@ export function buildLua54Bootstrap(root: string): string {
     local __weblua_select = select
     local __weblua_type = type
     local __weblua_tostring = tostring
+    local __weblua_concat = table.concat
+
+    -- Stringify in Lua, as the real print does: values crossing to JavaScript
+    -- become JS values, which loses 1.0 vs 1, -0.0, inf, and table addresses.
+    print = function(...)
+      local parts = {}
+      for index = 1, __weblua_select("#", ...) do
+        parts[index] = __weblua_tostring((__weblua_select(index, ...)))
+      end
+      __weblua_write_stdout(__weblua_concat(parts, "\\t") .. "\\n")
+    end
 
     __weblua_file_methods.write = function(file, ...)
       local sink
@@ -465,24 +479,6 @@ export function buildLua54Bootstrap(root: string): string {
       return io.output():flush()
     end
 
-    -- Lua 5.4 returns the loader data as require's second result, which here is
-    -- the absolute path inside the virtual mount. Rewrite it to the portable
-    -- project-relative path so the mount root never reaches user output, and
-    -- keep the original result count so require's arity is unchanged.
-    local __weblua_prefix = __weblua_root .. "/"
-    local __weblua_prefix_length = #__weblua_prefix
-    local __weblua_require = require
-    require = function(...)
-      local results = table.pack(__weblua_require(...))
-      local loaderdata = results[2]
-      if
-        type(loaderdata) == "string"
-        and string.sub(loaderdata, 1, __weblua_prefix_length) == __weblua_prefix
-      then
-        results[2] = string.sub(loaderdata, __weblua_prefix_length + 1)
-      end
-      return table.unpack(results, 1, results.n)
-    end
   `;
 }
 
@@ -494,7 +490,7 @@ async function checkStaticLua(
   const diagnostics: Diagnostic[] = [];
 
   try {
-    for (const [path, source] of projectEntries(project)) {
+    for (const [path, source] of sourceEntries(project)) {
       const error = executeStaticLua(runtime, buildStaticCompileScript(source, path));
       if (error) {
         diagnostics.push(diagnosticFromError(normalizeProjectError(error, project), path, project));
@@ -554,7 +550,7 @@ export function buildStaticCompileScript(source: string, filename: string): stri
 }
 
 export function buildStaticProjectBootstrap(project: ProjectPayload): string {
-  const sourceDefinitions = projectEntries(project)
+  const sourceDefinitions = sourceEntries(project)
     .map(([path, source]) => `__weblua_sources[ ${luaLongString(path)} ] = ${luaLongString(source)}`)
     .join("\n");
   const preloadDefinitions = Object.entries(buildModuleAliases(project.files))
@@ -711,11 +707,14 @@ async function checkLuau(project: ProjectPayload, deps: RuntimeDependencies): Pr
   const diagnostics: Diagnostic[] = [];
 
   try {
-    for (const [path, source] of projectEntries(project)) {
+    for (const [path, source] of sourceEntries(project)) {
       const loaded = state.loadstring(source, path, false);
       if (typeof loaded === "string") {
         diagnostics.push(diagnosticFromError(loaded, path, project));
       }
+    }
+    for (const { file, message } of readLuaurcAliases(project.files).errors) {
+      diagnostics.push({ file, filename: file, line: 1, severity: "error", message: `${file} ${message}` });
     }
     return diagnostics;
   } finally {
@@ -762,16 +761,26 @@ async function runLuau(
     const warn = (...args: unknown[]) => push("stderr", args);
 
     state.setOutputHandlers(print, warn, warn);
-    state.env.set("print", print, true);
-    state.env.set("warn", warn, true);
+    // LUAU_PRINT_BOOTSTRAP defines print and warn over these.
+    state.env.set("__weblua_print", print, true);
+    state.env.set("__weblua_warn", warn, true);
     state.env.set("read", (format?: unknown) => reader.read(format), true);
+    // Before any project file compiles: Luau resolves builtins like print when
+    // a chunk loads, so a later override would not reach them.
+    const printing = state.loadstring(LUAU_PRINT_BOOTSTRAP, "__weblua_print", true);
+    await printing();
 
     // Compile every source file before executing the entry. The require
     // bootstrap below only talks to these Luau functions and Lua tables, not
     // to a JavaScript resolver on each module load.
+    const luaurc = readLuaurcAliases(request.project.files);
+    if (luaurc.errors.length > 0) {
+      throw new Error(luaurc.errors.map(({ file, message }) => `${file} ${message}`).join("\n"));
+    }
     const modules: Record<string, unknown> = {};
-    for (const [path, source] of projectEntries(request.project)) {
-      const compiled = state.loadstring(source, path, false);
+    for (const [path, source] of sourceEntries(request.project)) {
+      // "@path" reads as "path:3:" in messages, as the Luau CLI prints them.
+      const compiled = state.loadstring(source, `@${path}`, false);
       if (typeof compiled === "string") {
         throw new Error(compiled);
       }
@@ -779,7 +788,8 @@ async function runLuau(
     }
 
     state.env.set("__weblua_modules", modules, true);
-    state.env.set("__weblua_module_aliases", buildModuleAliases(request.project.files), true);
+    const aliasTables = state.loadstring(buildLuauAliasTables(request.project, luaurc.aliases), "__weblua_aliases", true);
+    await aliasTables();
     // The task scheduler's only links to the host: a clock, and a sleep that
     // luau-web's Asyncify bridge awaits, so output keeps streaming while a
     // task waits.
@@ -976,9 +986,38 @@ export const LUAU_TASK_BOOTSTRAP = `
   end
 `;
 
+/**
+ * print and warn stringify in Luau, as the real ones do: values crossing to
+ * JavaScript become JS values, which loses -0, inf, and table addresses.
+ */
+export const LUAU_PRINT_BOOTSTRAP = `
+  local hostPrint = __weblua_print
+  local hostWarn = __weblua_warn
+  local toString = tostring
+  local select = select
+  local tableConcat = table.concat
+
+  local function joined(...)
+    local parts = {}
+    for index = 1, select("#", ...) do
+      parts[index] = toString((select(index, ...)))
+    end
+    return tableConcat(parts, "\\t")
+  end
+
+  function print(...)
+    hostPrint(joined(...))
+  end
+
+  function warn(...)
+    hostWarn(joined(...))
+  end
+`;
+
 export const LUAU_REQUIRE_BOOTSTRAP = `
   local moduleFunctions = __weblua_modules
   local moduleAliases = __weblua_module_aliases
+  local luaurcAliases = __weblua_luaurc_aliases
   local moduleCache = {}
   local moduleLoading = {}
   local debugInfo = debug.info
@@ -987,10 +1026,11 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
   local stringSub = string.sub
   local stringGsub = string.gsub
   local stringGmatch = string.gmatch
+  local stringLower = string.lower
   local tableConcat = table.concat
 
-  -- Every project file is compiled with its path as the chunk name, which
-  -- Luau reports as [string "path"]. The nearest project frame on the stack
+  -- Every project file is compiled with "@" .. its path as the chunk name, which
+  -- debug.info reports as the path. The nearest project frame on the stack
   -- is the module that called require, even through pcall or a local helper.
   local function requiringModule()
     for level = 3, 200 do
@@ -1015,6 +1055,22 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
     return parts
   end
 
+  -- Follows rest's parts from the folder parts in base. Errors point at the
+  -- require call, three frames above the resolver that calls this.
+  local function walkPath(base, rest, name)
+    for part in stringGmatch(rest, "[^/]+") do
+      if part == ".." then
+        if #base == 0 then
+          error("module '" .. name .. "' reaches above the project root", 5)
+        end
+        base[#base] = nil
+      elseif part ~= "." then
+        base[#base + 1] = part
+      end
+    end
+    return tableConcat(base, "/")
+  end
+
   -- Resolves ./, ../, and @self requires against the calling module, per
   -- Luau's require-by-string rules: ./ is the caller's own folder (for an
   -- init file, the folder that contains its folder) and @self is the caller.
@@ -1031,18 +1087,27 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
       base[#base] = nil
       rest = name
     end
+    return walkPath(base, rest, name)
+  end
 
-    for part in stringGmatch(rest, "[^/]+") do
-      if part == ".." then
-        if #base == 0 then
-          error("module '" .. name .. "' reaches above the project root", 4)
-        end
-        base[#base] = nil
-      elseif part ~= "." then
-        base[#base + 1] = part
-      end
+  local function folderOf(path)
+    return stringMatch(path, "^(.*)/[^/]*$") or ""
+  end
+
+  -- Any other @alias comes from the nearest .luaurc in the caller's folder or
+  -- above it, as in Luau's own resolver; the alias's path is already resolved.
+  local function resolveAlias(name, from)
+    local alias, rest = stringMatch(name, "^@([^/]+)/?(.*)$")
+    local key = alias and stringLower(alias)
+    local folder = from and folderOf(from) or ""
+    while key do
+      local defined = luaurcAliases[folder]
+      local base = defined and defined[key]
+      if base then return walkPath(splitPath(base), rest, name) end
+      if folder == "" then break end
+      folder = folderOf(folder)
     end
-    return tableConcat(base, "/")
+    error("unknown require alias '" .. (alias and "@" .. alias or name) .. "'; define it in a .luaurc file, or use ./, ../, or @self paths", 4)
   end
 
   -- Relative paths name files, not dotted modules, so only real paths match.
@@ -1063,10 +1128,9 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
       return findModuleFile(target), target
     end
 
-    -- Other @aliases (builtin modules, .luaurc) are not provided yet.
     if stringSub(name, 1, 1) == "@" then
-      local alias = stringMatch(name, "^@([^/]*)")
-      error("unknown require alias '@" .. alias .. "'; Weblua supports ./, ../, and @self paths", 3)
+      local target = resolveAlias(name, requiringModule())
+      return findModuleFile(target), target
     end
 
     local direct = moduleAliases[name]
@@ -1091,7 +1155,8 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
     moduleLoading[path] = true
     local ok, value = pcall(moduleFunction)
     moduleLoading[path] = nil
-    if not ok then error(value, 3) end
+    -- Unchanged, as a real require propagates it: level 3 stacked the caller's position on top.
+    if not ok then error(value, 0) end
 
     if value == nil then value = true end
     moduleCache[path] = value
@@ -1116,6 +1181,25 @@ export const LUAU_REQUIRE_BOOTSTRAP = `
 
 export function projectEntries(project: ProjectPayload): Array<[string, string]> {
   return Object.entries(project.files).sort(([a], [b]) => a.localeCompare(b));
+}
+
+/**
+ * Sets the require bootstrap's lookup tables as real Luau tables. luau-web
+ * exposes a JS object as a proxy whose missing keys read as tables, not nil,
+ * so a lookup miss looked like a hit: require("missing") failed with
+ * "attempt to concatenate table with string" instead of "not found".
+ */
+export function buildLuauAliasTables(project: ProjectPayload, luaurc: LuaurcAliases): string {
+  const table = (map: Record<string, string>) =>
+    `{ ${Object.entries(map).map(([key, value]) => `[ ${luaLongString(key)} ] = ${luaLongString(value)}`).join(", ")} }`;
+  const folders = Object.entries(luaurc).map(([folder, aliases]) => `[ ${luaLongString(folder)} ] = ${table(aliases)}`);
+  return `__weblua_module_aliases = ${table(buildModuleAliases(project.files))}
+__weblua_luaurc_aliases = { ${folders.join(", ")} }`;
+}
+
+/** The files a run or check compiles: everything but project data such as data.json or .luaurc. */
+export function sourceEntries(project: ProjectPayload): Array<[string, string]> {
+  return projectEntries(project).filter(([path]) => isSourcePath(path));
 }
 
 export function safeVirtualDirectory(id: string): string {

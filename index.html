@@ -114,7 +114,7 @@
             "name": "Can I use Weblua offline?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Weblua does not currently guarantee offline startup because it has no service worker or complete PWA cache. An already loaded session can run without an execution-server round trip."
+              "text": "Yes, for what you have used online. A service worker caches each page as you open it and each runtime the first time you run it, so a project that ran once reopens and runs without a connection. Pages and runtimes you have never loaded, and gists, still need one."
             }
           },
           {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_BYTECODE_OPTIONS, readBytecodeOptions, storeBytecodeOptions } from "./preferences";
+import { DEFAULT_BYTECODE_OPTIONS, readBytecodeOptions, readEditorOptions, storeBytecodeOptions, storeEditorOptions } from "./preferences";
 
 const KEY = "weblua:bytecode-options";
 
@@ -23,5 +23,16 @@ describe("bytecode options", () => {
 
     window.localStorage.setItem(KEY, JSON.stringify({ optimizationLevel: 7, debugLevel: 2, source: "yes" }));
     expect(readBytecodeOptions()).toEqual({ optimizationLevel: 1, debugLevel: 2, source: true });
+  });
+});
+
+describe("editor options", () => {
+  it("remembers a size from the menu and ignores any other", () => {
+    expect(readEditorOptions()).toEqual({ fontSize: 13.5, wrap: false });
+    storeEditorOptions({ fontSize: 17, wrap: true });
+    expect(readEditorOptions()).toEqual({ fontSize: 17, wrap: true });
+
+    window.localStorage.setItem("weblua:editor-options", JSON.stringify({ fontSize: 400, wrap: 1 }));
+    expect(readEditorOptions()).toEqual({ fontSize: 13.5, wrap: false });
   });
 });
