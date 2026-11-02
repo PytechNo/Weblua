@@ -1477,6 +1477,17 @@ body[data-theme="light"] .proof-logos li {
   gap: 6px;
 }
 
+.footer-base a,
+.site-footer-brand p a {
+  color: var(--muted);
+  text-underline-offset: 3px;
+}
+
+.footer-base a:hover,
+.site-footer-brand p a:hover {
+  color: var(--text);
+}
+
 /* ==========================================================================
    Playground
    ========================================================================== */
