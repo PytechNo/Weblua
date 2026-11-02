@@ -175,6 +175,12 @@ export function SiteFrame({ theme, onToggleTheme, current, children }: SiteFrame
               <span className="brand-name">Weblua</span>
             </a>
             <p>Run Lua 5.1 to 5.5 and Luau in your browser. Free, with no install and no account.</p>
+            <p>
+              Built by{" "}
+              <a href="https://mcusson.com" target="_blank" rel="noopener">
+                mcusson.com
+              </a>
+            </p>
           </div>
           {FOOTER.map(([heading, links]) => (
             <nav key={heading} aria-label={heading}>

@@ -902,6 +902,12 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </div>
         <div className="footer-base">
           <span>© {new Date().getFullYear()} Weblua. Open source under the MIT license.</span>
+          <span>
+            Built by{" "}
+            <a href="https://mcusson.com" target="_blank" rel="noopener">
+              mcusson.com
+            </a>
+          </span>
           <span className="footer-moon">
             Lua means “moon” in Portuguese <Moon size={13} aria-hidden="true" />
           </span>
