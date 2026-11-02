@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BadgeCheck, BookOpen, Check, Clock, ExternalLink, Lightbulb, Play } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, BookOpen, Check, ChevronDown, Clock, ExternalLink, Lightbulb, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   type ArticleBlock,
@@ -220,18 +220,24 @@ function tocItems(page: Pick<ArticlePage, "blocks" | "exercise" | "faq">): Array
 
 function Faq({ items }: { items: NonNullable<ArticlePage["faq"]> }) {
   return (
-    <section className="faq" id="faq" aria-labelledby="faq-title">
+    <section id="faq" aria-labelledby="faq-title">
       <h2 id="faq-title">Questions</h2>
-      {items.map(([question, answer]) => (
-        <details key={question}>
-          <summary>
-            <Inline text={question} />
-          </summary>
-          <p>
-            <Inline text={answer} />
-          </p>
-        </details>
-      ))}
+      <div className="faq-list">
+        {items.map(([question, answer]) => (
+          <details className="faq" key={question}>
+            <summary>
+              {/* One flex item, or inline code would split the question into columns. */}
+              <span>
+                <Inline text={question} />
+              </span>
+              <ChevronDown size={17} aria-hidden="true" />
+            </summary>
+            <p>
+              <Inline text={answer} />
+            </p>
+          </details>
+        ))}
+      </div>
     </section>
   );
 }
