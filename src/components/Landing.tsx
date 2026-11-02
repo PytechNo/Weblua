@@ -9,19 +9,17 @@ import {
   Keyboard,
   Link,
   Lock,
-  Menu,
   Minus,
   Moon,
   Play,
   Share2,
   Sparkles,
-  Sun,
   Terminal,
-  X,
   Zap
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GitHubMark, MoonMark } from "./Brand";
+import { SiteHeader } from "./SiteFrame";
 
 type Theme = "dark" | "light";
 
@@ -349,27 +347,9 @@ const ACCESS_OPTIONS = [
 ] as const;
 
 export function Landing({ theme, onToggleTheme }: LandingProps) {
-  const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"run" | "share" | "embed">("run");
 
   useScrollReveal();
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [menuOpen]);
-
-  const closeMenu = () => setMenuOpen(false);
 
   return (
     <div className="landing">
@@ -377,79 +357,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         Skip to content
       </a>
 
-      <header className={scrolled ? "nav is-scrolled" : "nav"}>
-        <div className="nav-inner">
-          <a className="nav-brand" href="/" aria-label="Weblua home">
-            <MoonMark />
-            <span>Weblua</span>
-          </a>
-
-          <nav className="nav-links" aria-label="Primary">
-            <a href="#features">Features</a>
-            <a href="#compare">Compare</a>
-            <a href="#how">How it works</a>
-            <a href="#access">Access</a>
-            <a href="#faq">FAQ</a>
-          </nav>
-
-          <div className="nav-actions">
-            <a
-              className="nav-icon"
-              href="https://github.com/PytechNo/Weblua"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Weblua on GitHub"
-            >
-              <GitHubMark />
-            </a>
-            <button
-              className="nav-icon"
-              type="button"
-              onClick={onToggleTheme}
-              aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-            >
-              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-            <a className="btn btn-primary nav-cta" href="/playground">
-              Launch playground
-              <ArrowRight size={15} />
-            </a>
-            <button
-              className="nav-icon nav-burger"
-              type="button"
-              onClick={() => setMenuOpen(!menuOpen)}
-              aria-expanded={menuOpen}
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
-            >
-              {menuOpen ? <X size={19} /> : <Menu size={19} />}
-            </button>
-          </div>
-        </div>
-
-        {menuOpen && (
-          <nav className="nav-mobile" aria-label="Mobile">
-            <a href="#features" onClick={closeMenu}>
-              Features
-            </a>
-            <a href="#compare" onClick={closeMenu}>
-              Compare
-            </a>
-            <a href="#how" onClick={closeMenu}>
-              How it works
-            </a>
-            <a href="#access" onClick={closeMenu}>
-              Access
-            </a>
-            <a href="#faq" onClick={closeMenu}>
-              FAQ
-            </a>
-            <a className="btn btn-primary" href="/playground">
-              Launch playground
-              <ArrowRight size={15} />
-            </a>
-          </nav>
-        )}
-      </header>
+      <SiteHeader theme={theme} onToggleTheme={onToggleTheme} />
 
       <main id="main">
         {/* ---------- Hero ---------- */}

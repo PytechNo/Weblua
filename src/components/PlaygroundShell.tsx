@@ -1,8 +1,8 @@
-import { ArrowDown, Moon, Sun, X } from "lucide-react";
+import { ArrowDown, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ToolPage } from "../lib/routes";
 import type { Theme } from "../lib/theme";
-import { GitHubMark, MoonMark } from "./Brand";
+import { SiteHeader } from "./SiteFrame";
 
 /** Read by index.html's pre-paint script, which hides the card on later visits. */
 const ABOUT_DISMISSED_KEY = "weblua:about-dismissed";
@@ -80,41 +80,13 @@ export function PlaygroundShell({ theme, onToggleTheme, isEmbed, tool, guide, ch
     <>
       <div className={isEmbed ? "app app-embed" : "app"}>
         {!isEmbed && (
-          <header className="app-header">
-            <div className="app-heading">
-              <a className="brand" href="/" aria-label="Weblua home">
-                <MoonMark size={26} />
-                <span className="brand-name">Weblua</span>
+          <SiteHeader theme={theme} onToggleTheme={onToggleTheme} current="/playground" title={tool ? TOOL_TITLES[tool] : PLAYGROUND_PAGE.title}>
+            {tool && (
+              <a className="button app-guide-link" href="#guide">
+                Guide <ArrowDown size={15} />
               </a>
-              <h1 className="app-title">{tool ? TOOL_TITLES[tool] : PLAYGROUND_PAGE.title}</h1>
-            </div>
-            <div className="header-actions">
-              {tool && (
-                <a className="button app-guide-link" href="#guide">
-                  Guide <ArrowDown size={15} />
-                </a>
-              )}
-              <a
-                className="icon-button"
-                href="https://github.com/PytechNo/Weblua"
-                target="_blank"
-                rel="noreferrer"
-                title="Open GitHub repository"
-                aria-label="Open GitHub repository"
-              >
-                <GitHubMark size={17} />
-              </a>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={onToggleTheme}
-                title={theme === "dark" ? "Use light theme" : "Use dark theme"}
-                aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}
-              >
-                {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-              </button>
-            </div>
-          </header>
+            )}
+          </SiteHeader>
         )}
 
         {children ?? <main className="workspace" />}
