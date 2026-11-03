@@ -98,7 +98,7 @@ import {
 } from "./lib/project";
 import { runProject, type RunHandle } from "./lib/runner";
 import { selectionLayer } from "./lib/selectionLayer";
-import { reportRuntimeError, trackEvent } from "./lib/telemetry";
+import { reportRuntimeError, setTelemetryContent, trackEvent } from "./lib/telemetry";
 import { DEFAULT_RUN_TIMEOUT_MS, EXTENDED_RUN_TIMEOUT_MS } from "./lib/types";
 import type {
   BytecodeOptions,
@@ -403,6 +403,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const skipNextAutosave = useRef(false);
   /** The run in flight, so Stop and unmount can end it. Null when idle. */
   const runRef = useRef<RunHandle | null>(null);
+  const automaticRun = useRef(false);
   /** Latest workspace for callbacks that must not be rebuilt per keystroke. */
   const workspaceRef = useRef(workspace);
   const typeModeRef = useRef(typeMode);
@@ -435,22 +436,33 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       try {
         return await loadGistProject(id);
       } catch (error) {
-        if (!cancelled) setNotice(`Could not open the gist. ${error instanceof Error ? error.message : ""}`.trim());
+        if (!cancelled) {
+          trackEvent("content_open", { how: "gist", status: "error", reason: "load" });
+          setNotice(`Could not open the gist. ${error instanceof Error ? error.message : ""}`.trim());
+        }
         return null;
       }
     };
 
     const restore = async () => {
+      const hash = window.location.hash;
+      const params = new URLSearchParams(hash.replace(/^#/, ""));
+      const how = params.has("gist") ? "gist" : params.has("example") ? "example" : params.has("c") || params.has("share") ? "share" : null;
       try {
-        const gistId = readGistHash(window.location.hash);
-        const linkedExample = await findExample(window.location.hash);
+        const gistId = readGistHash(hash);
+        const linkedExample = await findExample(hash);
         const [shared, draft, savedProjects] = await Promise.all([
-          gistId ? readGist(gistId) : linkedExample ? projectForExample(linkedExample) : readProjectShareHash(window.location.hash),
+          gistId ? readGist(gistId) : linkedExample ? projectForExample(linkedExample) : readProjectShareHash(hash),
           keepsDraft ? workspaceStore.getDraft() : null,
           isEmbed ? ([] as StoredWorkspaceProject[]) : workspaceStore.listProjects()
         ]);
 
         if (cancelled) return;
+        // Only a successfully resolved built-in ID is safe to send; never a hash, gist ID or payload.
+        setTelemetryContent(linkedExample ? { example: linkedExample.id } : {});
+        if (how && !(gistId && !shared)) trackEvent("content_open", {
+          how, status: shared ? "ok" : "error", ...(shared ? { flavor: shared.flavor } : { reason: "invalid" })
+        });
         if (shared) {
           setWorkspace(workspaceFromProject(shared));
         } else if (draft) {
@@ -461,7 +473,11 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         // A truncated share hash throws while decoding. The default workspace
         // is a fine fallback, but the editor now waits on this flag, so it has
         // to be set on every path or a bad link renders an empty pane forever.
-        if (!cancelled) reportRuntimeError(error);
+        if (!cancelled) {
+          if (how) trackEvent("content_open", { how, status: "error", reason: "decode" });
+          else trackEvent("action_failed", { action: "project_restore", reason: "storage" });
+          reportRuntimeError(error);
+        }
       } finally {
         if (!cancelled) setIsHydrated(true);
       }
@@ -524,7 +540,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     if (runRef.current) return;
 
     const flavor = workspace.project.flavor;
+    const trigger = automaticRun.current ? "auto" : "manual";
+    automaticRun.current = false;
     const timeoutMs = longRuns ? EXTENDED_RUN_TIMEOUT_MS : DEFAULT_RUN_TIMEOUT_MS;
+    trackEvent("run_start", { flavor, trigger, timeoutMs, ...(compareWith ? { compare: compareWith } : {}) });
     setIsRunning(true);
     setNotice(null);
     setOutputTab("output");
@@ -576,8 +595,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         const output = nextResult.chunks.filter((chunk) => chunk.kind === "stdout").map((chunk) => chunk.text).join("\n");
         window.parent.postMessage({ type: "weblua:run", status: nextResult.status, output }, window.location.origin);
       }
-      trackEvent("run", { flavor, status: nextResult.status, timeoutMs, ...(compareWith ? { compare: compareWith } : {}) });
+      trackEvent("run", { flavor, trigger, status: nextResult.status, timeoutMs, ...(compareWith ? { compare: compareWith } : {}) });
     } catch (error) {
+      trackEvent("run", { flavor, trigger, status: "error", reason: "runtime", timeoutMs });
       reportRuntimeError(error);
       setCompareResult(null);
       setResult({
@@ -600,6 +620,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     if (!isEmbed || !isHydrated || autorunDone.current || !params.has("example") || params.get("run") !== "1") return;
     autorunDone.current = true;
+    automaticRun.current = true;
     void execute();
   }, [execute, isEmbed, isHydrated]);
 
@@ -627,6 +648,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   }, [isEmbed, workspace.project]);
 
   const runCheck = useCallback(async () => {
+    trackEvent("check_start", { flavor: workspace.project.flavor, types: typeMode });
     setIsChecking(true);
     setNotice(null);
     setOutputTab("output");
@@ -636,6 +658,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       const isLuau = workspace.project.flavor === "luau";
       const checked = await checkProject(workspace.project, workspace.activeFile, { typeMode });
       if (!checked) {
+        trackEvent("check", { flavor: workspace.project.flavor, status: "error", reason: "unavailable", types: typeMode });
         setNotice("Check could not run. Try again.");
         return;
       }
@@ -643,6 +666,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       trackEvent("check", {
         flavor: workspace.project.flavor,
         problems: checked.diagnostics.length,
+        status: checked.diagnostics.some((diagnostic) => diagnostic.severity === "error") ? "error" : "ok",
+        typeChecked: checked.typeChecked,
         ...(isLuau ? { types: typeMode } : {})
       });
 
@@ -681,6 +706,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         durationMs: checked.durationMs,
         chunks
       });
+    } catch (error) {
+      trackEvent("check", { flavor: workspace.project.flavor, status: "error", reason: "runtime", types: typeMode });
+      reportRuntimeError(error);
+      setNotice("Check could not run. Try again.");
     } finally {
       setIsChecking(false);
     }
@@ -698,6 +727,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     const { project, activeFile } = workspaceRef.current;
     const source = view.state.doc.toString();
     if (!isSourcePath(activeFile)) {
+      trackEvent("action_failed", { action: "format", reason: "unsupported" });
       setNotice("Format works on .lua and .luau files.");
       return;
     }
@@ -715,6 +745,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       const change = minimalChange(source, formatted.code);
       if (change) view.dispatch({ changes: change, userEvent: "input.format" });
       setNotice(null);
+    } catch (error) {
+      trackEvent("format", { flavor: project.flavor, status: "error", reason: "runtime" });
+      reportRuntimeError(error);
+      setNotice("Format could not run. Try again.");
     } finally {
       setIsFormatting(false);
     }
@@ -859,6 +893,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const loadExample = (id: string) => {
     const example = examples.find((item) => item.id === id);
     if (!example) return;
+    setTelemetryContent({ example: example.id });
+    trackEvent("example_select", { example: example.id, flavor: projectForExample(example).flavor });
 
     setWorkspace({
       ...workspaceFromProject(projectForExample(example)),
@@ -870,6 +906,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   };
 
   const updateRuntime = (flavor: RuntimeFlavor) => {
+    trackEvent("runtime", { to: flavor });
     updateWorkspace((current) => ({
       ...current,
       project: { ...current.project, flavor }
@@ -893,12 +930,15 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
 
     try {
       if (Object.hasOwn(workspace.project.files, path)) {
+        trackEvent("action_failed", { action: "file_add", reason: "exists" });
         setNotice("A file already uses that path.");
         return;
       }
       const project = upsertProjectFile(workspace.project, path, "");
       setWorkspace({ ...workspace, project, activeFile: path });
+      trackEvent("file", { action: "add", files: Object.keys(project.files).length });
     } catch (error) {
+      trackEvent("action_failed", { action: "file_add", reason: "invalid" });
       setNotice(error instanceof Error ? error.message : "Could not create that file.");
     }
   };
@@ -910,7 +950,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     try {
       const project = renameProjectFile(workspace.project, workspace.activeFile, path);
       setWorkspace({ ...workspace, project, activeFile: path });
+      trackEvent("file", { action: "rename" });
     } catch (error) {
+      trackEvent("action_failed", { action: "file_rename", reason: "invalid" });
       setNotice(error instanceof Error ? error.message : "Could not rename that file.");
     }
   };
@@ -929,7 +971,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         : Object.keys(project.files)[0];
       setWorkspace({ ...workspace, project, activeFile });
       offerUndo(`Deleted ${workspace.activeFile}.`, workspace);
+      trackEvent("file", { action: "delete", files: Object.keys(project.files).length });
     } catch (error) {
+      trackEvent("action_failed", { action: "file_delete", reason: "invalid" });
       setNotice(error instanceof Error ? error.message : "Could not delete that file.");
     }
   };
@@ -937,20 +981,25 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   const setActiveEntry = () => {
     try {
       setWorkspace({ ...workspace, project: setProjectEntry(workspace.project, workspace.activeFile) });
+      trackEvent("file", { action: "entry" });
     } catch (error) {
+      trackEvent("action_failed", { action: "file_entry", reason: "invalid" });
       setNotice(error instanceof Error ? error.message : "Could not set the entry file.");
     }
   };
 
   const copyShareLink = async () => {
+    trackEvent("share_start", { flavor: workspace.project.flavor, method: nativeShare ? "native" : "clipboard" });
     let shareUrl: string | null;
     try {
       shareUrl = await tryBuildProjectShareUrl(workspace.project);
     } catch (error) {
+      trackEvent("action_failed", { action: "copy_share", reason: "encode" });
       setNotice(error instanceof Error ? error.message : "Could not create the share link.");
       return;
     }
     if (!shareUrl) {
+      trackEvent("action_failed", { action: "copy_share", reason: "too-large" });
       setNotice(
         `This project is too large for a link. Export it, add the ${PROJECT_EXPORT_EXTENSION} file to a GitHub gist, then open the gist from Projects for a short link.`
       );
@@ -962,17 +1011,21 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     if (nativeShare) {
       try {
         await navigator.share({ title: "Weblua project", url: shareUrl });
-        trackEvent("copy_share", { flavor: workspace.project.flavor });
+        trackEvent("copy_share", { flavor: workspace.project.flavor, method: "native" });
         return;
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (error instanceof DOMException && error.name === "AbortError") {
+          trackEvent("action_failed", { action: "copy_share", reason: "cancelled", method: "native" });
+          return;
+        }
       }
     }
     try {
       await navigator.clipboard.writeText(shareUrl);
       setNotice("Share link copied. Input stays local to this browser.");
-      trackEvent("copy_share", { flavor: workspace.project.flavor });
+      trackEvent("copy_share", { flavor: workspace.project.flavor, method: "clipboard" });
     } catch {
+      trackEvent("action_failed", { action: "copy_share", reason: "clipboard" });
       setNotice(
         isEmbed
           ? "Could not copy the share link."
@@ -982,10 +1035,15 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   };
 
   const copyInput = async () => {
-    await navigator.clipboard.writeText(activeCode);
-    setCopiedInput(true);
-    trackEvent("copy_input", { flavor: workspace.project.flavor });
-    window.setTimeout(() => setCopiedInput(false), 1500);
+    try {
+      await navigator.clipboard.writeText(activeCode);
+      setCopiedInput(true);
+      trackEvent("copy_input", { flavor: workspace.project.flavor });
+      window.setTimeout(() => setCopiedInput(false), 1500);
+    } catch {
+      trackEvent("action_failed", { action: "copy_input", reason: "clipboard" });
+      setNotice("Could not copy the code.");
+    }
   };
 
   const bytecodeListing = bytecode?.status === "ready" && bytecode.result.ok ? bytecode.result.listing : "";
@@ -996,21 +1054,30 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       : compareResult && result
         ? [result, compareResult].map((run) => `-- ${runtimeLabel(run.flavor)}\n${outputText(run)}`).join("\n\n")
         : outputText(result);
-    await navigator.clipboard.writeText(text);
-    setCopiedOutput(true);
-    trackEvent(showBytecode ? "copy_bytecode" : "copy_output", { flavor: workspace.project.flavor });
-    window.setTimeout(() => setCopiedOutput(false), 1500);
+    const action = showBytecode ? "copy_bytecode" : "copy_output";
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedOutput(true);
+      trackEvent(action, { flavor: workspace.project.flavor });
+      window.setTimeout(() => setCopiedOutput(false), 1500);
+    } catch {
+      trackEvent("action_failed", { action, reason: "clipboard" });
+      setNotice("Could not copy the output.");
+    }
   };
 
   const copyEmbed = async () => {
+    trackEvent("embed_start", { flavor: workspace.project.flavor });
     let embedUrl: string | null;
     try {
       embedUrl = await tryBuildProjectShareUrl(workspace.project, true);
     } catch (error) {
+      trackEvent("action_failed", { action: "copy_embed", reason: "encode" });
       setNotice(error instanceof Error ? error.message : "Could not create the embed link.");
       return;
     }
     if (!embedUrl) {
+      trackEvent("action_failed", { action: "copy_embed", reason: "too-large" });
       setNotice(
         `This project is too large for an embed link. Export it, add the ${PROJECT_EXPORT_EXTENSION} file to a GitHub gist, and embed /embed#gist= followed by the gist's ID.`
       );
@@ -1023,11 +1090,14 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       setNotice("Embed code copied.");
       trackEvent("copy_embed", { flavor: workspace.project.flavor });
     } catch (error) {
+      trackEvent("action_failed", { action: "copy_embed", reason: "clipboard" });
       setNotice(error instanceof Error ? error.message : "Could not copy the embed code.");
     }
   };
 
   const reset = async () => {
+    setTelemetryContent({});
+    trackEvent("project", { action: "reset", flavor: workspace.project.flavor });
     const previous = workspace;
     skipNextAutosave.current = true;
     setWorkspace(defaultWorkspace(tool));
@@ -1080,6 +1150,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   };
 
   const newProject = () => {
+    setTelemetryContent({});
+    trackEvent("project", { action: "new", flavor: workspace.project.flavor });
     setWorkspace(createDefaultWorkspace(workspace.project.flavor));
     clearOutput();
     setLibraryOpen(false);
@@ -1091,12 +1163,14 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     if (!name) return;
     const saved = await workspaceStore.createProject(name, workspace);
     if (!saved) {
+      trackEvent("action_failed", { action: "project_save", reason: "storage" });
       setNotice("Could not save this project locally.");
       return;
     }
     setWorkspace(saved.workspace);
     await refreshProjects();
     setNotice(`Saved ${saved.name}. Changes now update it automatically.`);
+    trackEvent("project", { action: "save", flavor: saved.workspace.project.flavor, files: Object.keys(saved.workspace.project.files).length });
   };
 
   const openGist = async () => {
@@ -1104,6 +1178,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     if (!input?.trim()) return;
     const id = gistIdFrom(input);
     if (!id) {
+      trackEvent("action_failed", { action: "open_gist", reason: "invalid" });
       setNotice("That is not a GitHub gist URL or ID.");
       return;
     }
@@ -1111,6 +1186,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     setNotice("Loading the gist from GitHub…");
     try {
       const project = await loadGistProject(id);
+      setTelemetryContent({});
       setWorkspace(workspaceFromProject(project));
       clearOutput();
       setLibraryOpen(false);
@@ -1118,11 +1194,14 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       setNotice("Opened the gist. This page's address now links to it.");
       trackEvent("open_gist", { flavor: project.flavor });
     } catch (error) {
+      trackEvent("action_failed", { action: "open_gist", reason: "load" });
       setNotice(`Could not open the gist. ${error instanceof Error ? error.message : ""}`.trim());
     }
   };
 
   const openProject = (project: StoredWorkspaceProject) => {
+    setTelemetryContent({});
+    trackEvent("project", { action: "open", flavor: project.workspace.project.flavor, files: Object.keys(project.workspace.project.files).length });
     setWorkspace(project.workspace);
     setLibraryOpen(false);
     clearOutput();
@@ -1137,11 +1216,13 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     if (!name) return;
     const renamed = await workspaceStore.renameProject(id, name);
     if (!renamed) {
+      trackEvent("action_failed", { action: "project_rename", reason: "storage" });
       setNotice("Could not rename this project.");
       return;
     }
     await refreshProjects();
     setNotice(`Renamed to ${renamed.name}.`);
+    trackEvent("project", { action: "rename" });
   };
 
   const deleteCurrentProject = async () => {
@@ -1149,6 +1230,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     const current = projects.find((project) => project.id === id);
     if (!id || !current || !window.confirm(`Delete ${current.name} from this browser?`)) return;
     if (!(await workspaceStore.deleteProject(id))) {
+      trackEvent("action_failed", { action: "project_delete", reason: "storage" });
       setNotice("Could not delete this project.");
       return;
     }
@@ -1158,6 +1240,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     });
     await refreshProjects();
     setNotice("Deleted the named project. The open workspace remains as a draft.");
+    trackEvent("project", { action: "delete" });
   };
 
   const exportProject = () => {
@@ -1171,6 +1254,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(href), 0);
     setNotice("Project exported. Input is intentionally not included.");
+    trackEvent("project", { action: "export", flavor: workspace.project.flavor, files: Object.keys(workspace.project.files).length });
   };
 
   const importProject = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -1181,6 +1265,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     try {
       const project = deserializeProject(await file.text());
       if (!project) {
+        trackEvent("action_failed", { action: "project_import", reason: "invalid" });
         setNotice("That file is not a valid Weblua project export.");
         return;
       }
@@ -1192,14 +1277,18 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         workspaceFromProject(project)
       );
       if (!imported) {
+        trackEvent("action_failed", { action: "project_import", reason: "storage" });
         setNotice("Could not save the imported project locally.");
         return;
       }
       setWorkspace(imported.workspace);
+      setTelemetryContent({});
+      trackEvent("project", { action: "import", flavor: project.flavor, files: Object.keys(project.files).length });
       clearOutput();
       await refreshProjects();
       setNotice(`Imported ${imported.name}.`);
     } catch (error) {
+      trackEvent("action_failed", { action: "project_import", reason: "read" });
       setNotice(error instanceof Error ? error.message : "Could not import that project.");
     }
   };
@@ -1258,6 +1347,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       value={compareWith ?? ""}
       onChange={(event) => {
         setCompareFlavor((event.target.value || null) as RuntimeFlavor | null);
+        trackEvent("compare", { to: event.target.value || "off" });
         setCompareResult(null);
       }}
     >
@@ -1273,7 +1363,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   );
 
   const typeModeSelect = (
-    <select value={typeMode} onChange={(event) => setTypeMode(event.target.value as LuauTypeMode)}>
+    <select value={typeMode} onChange={(event) => {
+      setTypeMode(event.target.value as LuauTypeMode);
+      trackEvent("type_mode", { to: event.target.value });
+    }}>
       {typeModeOptions.map((option) => (
         <option key={option.value} value={option.value}>
           {option.label}

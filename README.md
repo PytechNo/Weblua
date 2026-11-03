@@ -235,12 +235,19 @@ places source in a URL fragment only when the user requests a link or embed. Ope
 `#gist=` link, or a gist from **Projects**, downloads that gist from `api.github.com`.
 
 Deployments may optionally enable Plausible or Umami usage events and Sentry error reporting.
-The tracked product events contain runtime/status metadata rather than source. Sentry
+The tracked product events contain fixed runtime/status, feature, public lesson/example,
+and button-placement metadata rather than source. They cover editor actions, local projects,
+standalone tools, learning progress, page reading, and outbound link hosts. Sentry
 is configured without default PII, and Weblua strips URL fragments and redacts `#c=`,
 `#share=`, and `#gist=` values from error events and navigation breadcrumbs before
 sending. Plausible is not loaded on a URL that contains a current or legacy source
 payload or a gist ID (the only key to a secret gist). Umami is told to drop URL
-fragments, which hold those values, from every page and referrer it reports.
+fragments, which hold those values, from every page and referrer it reports. Umami also
+keeps only UTM campaign query parameters, removes same-site referrers, reduces external
+referrers to their origin, and collects Core Web Vitals on compatible versions.
+Telemetry runs in production builds only, honors Global Privacy Control and Do Not Track,
+and supports a persistent browser opt-out at `/?analytics=off` (`/?analytics=on` reverses it).
+See [analytics setup, event definitions, and verification](docs/analytics.md).
 Leave the environment variables unset to disable these integrations completely.
 
 ## Browser requirements

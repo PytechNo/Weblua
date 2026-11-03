@@ -7,6 +7,7 @@ import { runSnippet } from "../lib/runner";
 import { buildLuaToJsonScript, jsonToLua, parseLuaToJsonOutput } from "../lib/tableJson";
 import type { Theme } from "../lib/theme";
 import type { RunResult, RuntimeFlavor } from "../lib/types";
+import { trackEvent } from "../lib/telemetry";
 import { GuideContent } from "./Articles";
 import { SiteFrame } from "./SiteFrame";
 
@@ -17,30 +18,66 @@ const RUN_DELAY_MS = 250;
  * Runs `code` on `flavor` once typing pauses, stopping the previous run, and
  * keeps the last answer on screen while the next one runs.
  */
-function useScriptRun<T>(code: string | null, flavor: RuntimeFlavor, parse: (result: RunResult) => T) {
+function useScriptRun<T>(code: string | null, flavor: RuntimeFlavor, parse: (result: RunResult) => T, onResult?: (value: T) => void) {
   const [value, setValue] = useState<T | null>(null);
   const [pending, setPending] = useState(false);
+  const complete = useRef(onResult);
+  complete.current = onResult;
 
   useEffect(() => {
     if (code === null) return;
     setPending(true);
+    let cancelled = false;
     let stop = () => {};
     const timer = window.setTimeout(() => {
-      const handle = runSnippet(code, flavor);
-      stop = handle.stop;
-      void handle.result.then((result) => {
-        if (result.status === "stopped") return;
-        setValue(parse(result));
+      void (async () => {
+        let result: RunResult;
+        try {
+          const handle = runSnippet(code, flavor);
+          stop = handle.stop;
+          result = await handle.result;
+        } catch {
+          result = { id: "failed", flavor, status: "error", durationMs: 0,
+            chunks: [{ kind: "stderr", text: "The runtime could not start. Try again." }] };
+        }
+        if (cancelled || result.status === "stopped") return;
+        const parsed = parse(result);
+        setValue(parsed);
         setPending(false);
-      });
+        complete.current?.(parsed);
+      })();
     }, RUN_DELAY_MS);
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
       stop();
     };
   }, [code, flavor, parse]);
 
   return { value, pending };
+}
+
+/** Default demos are page views; actual use and each outcome count once per mode. */
+function useToolTelemetry(tool: StandaloneTool) {
+  const touched = useRef(false);
+  const sent = useRef(new Set<string>());
+  return {
+    touch(flavor: RuntimeFlavor, direction?: string) {
+      touched.current = true;
+      const key = `use:${flavor}:${direction}`;
+      if (sent.current.has(key)) return;
+      sent.current.add(key);
+      trackEvent("tool_use", { tool, flavor, direction });
+    },
+    complete(ok: boolean, flavor: RuntimeFlavor, direction?: string) {
+      if (!touched.current) return;
+      const status = ok ? "ok" : "error";
+      const key = `${flavor}:${direction}:${status}`;
+      if (sent.current.has(key)) return;
+      sent.current.add(key);
+      trackEvent("tool_result", { tool, flavor, direction, status });
+    }
+  };
 }
 
 const decoder = new TextDecoder();
@@ -61,7 +98,9 @@ function RuntimeSelect({ value, onChange }: { value: RuntimeFlavor; onChange: (f
   );
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({ text, label, tool, direction, onUse }: {
+  text: string; label: string; tool: StandaloneTool; direction?: string; onUse: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -70,12 +109,17 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       disabled={!text}
       title={label}
       aria-label={label}
-      onClick={() =>
-        void navigator.clipboard.writeText(text).then(() => {
+      onClick={async () => {
+        onUse();
+        try {
+          await navigator.clipboard.writeText(text);
           setCopied(true);
+          trackEvent("tool_copy", { tool, direction, status: "ok" });
           window.setTimeout(() => setCopied(false), 1500);
-        })
-      }
+        } catch {
+          trackEvent("action_failed", { action: "tool_copy", tool, direction, reason: "clipboard" });
+        }
+      }}
     >
       {copied ? <Check size={16} /> : <Copy size={16} />}
     </button>
@@ -135,13 +179,14 @@ function readPatternHash(): Partial<{ pattern: string; text: string; replacement
 }
 
 function PatternTester() {
+  const telemetry = useToolTelemetry("pattern-tester");
   const [initial] = useState(() => (typeof window === "undefined" ? {} : readPatternHash()));
   const [pattern, setPattern] = useState(initial.pattern ?? PATTERN_PRESETS[0].pattern);
   const [subject, setSubject] = useState(initial.text ?? PATTERN_PRESETS[0].text);
   const [replacement, setReplacement] = useState(initial.replacement ?? PATTERN_PRESETS[0].replacement);
   const [flavor, setFlavor] = useState<RuntimeFlavor>(initial.flavor ?? "lua54");
   const code = useMemo(() => buildPatternScript(pattern, subject, replacement), [pattern, subject, replacement]);
-  const { value: report, pending } = useScriptRun(code, flavor, parsePatternOutput);
+  const { value: report, pending } = useScriptRun(code, flavor, parsePatternOutput, (value) => telemetry.complete(value.ok, flavor));
   const subjectBytes = useMemo(() => new TextEncoder().encode(subject), [subject]);
   const root = useRef<HTMLDivElement>(null);
 
@@ -150,6 +195,8 @@ function PatternTester() {
     const onHash = () => {
       const linked = readPatternHash();
       if (linked.pattern === undefined) return;
+      telemetry.touch(linked.flavor ?? flavor);
+      trackEvent("tool_preset", { tool: "pattern-tester", preset: "guide" });
       setPattern(linked.pattern);
       setSubject(linked.text ?? "");
       setReplacement(linked.replacement ?? "");
@@ -158,9 +205,11 @@ function PatternTester() {
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+  }, [flavor]);
 
   const applyPreset = (preset: (typeof PATTERN_PRESETS)[number]) => {
+    telemetry.touch(flavor);
+    trackEvent("tool_preset", { tool: "pattern-tester", preset: PATTERN_PRESETS.indexOf(preset) + 1 });
     setPattern(preset.pattern);
     setSubject(preset.text);
     setReplacement(preset.replacement);
@@ -180,17 +229,21 @@ function PatternTester() {
         <section className="tool-panel" aria-label="Pattern and text">
           <label className="tool-field">
             <span>Pattern</span>
-            <input className="tool-mono" value={pattern} onChange={(event) => setPattern(event.target.value)} spellCheck={false} autoCapitalize="off" autoComplete="off" />
+            <input className="tool-mono" value={pattern} onChange={(event) => { telemetry.touch(flavor); setPattern(event.target.value); }} spellCheck={false} autoCapitalize="off" autoComplete="off" />
           </label>
           <label className="tool-field">
             <span>Text</span>
-            <textarea className="tool-mono" value={subject} onChange={(event) => setSubject(event.target.value)} rows={6} spellCheck={false} />
+            <textarea className="tool-mono" value={subject} onChange={(event) => { telemetry.touch(flavor); setSubject(event.target.value); }} rows={6} spellCheck={false} />
           </label>
           <label className="tool-field">
             <span>Replacement, for string.gsub</span>
-            <input className="tool-mono" value={replacement} onChange={(event) => setReplacement(event.target.value)} spellCheck={false} autoCapitalize="off" autoComplete="off" />
+            <input className="tool-mono" value={replacement} onChange={(event) => { telemetry.touch(flavor); setReplacement(event.target.value); }} spellCheck={false} autoCapitalize="off" autoComplete="off" />
           </label>
-          <RuntimeSelect value={flavor} onChange={setFlavor} />
+          <RuntimeSelect value={flavor} onChange={(next) => {
+            telemetry.touch(next);
+            trackEvent("runtime", { tool: "pattern-tester", to: next });
+            setFlavor(next);
+          }} />
           {pattern.startsWith("^") && (
             <p className="tool-note">
               A leading ^ anchors string.find and string.match, so there is at most one match. string.gmatch reads it as a
@@ -239,7 +292,9 @@ function PatternTester() {
               )}
               <h2 className="tool-heading">
                 string.gsub <span>{report.gsub.count} replacement{report.gsub.count === 1 ? "" : "s"}</span>
-                <CopyButton text={decode(report.gsub.bytes)} label="Copy the replaced text" />
+                <CopyButton text={decode(report.gsub.bytes)} label="Copy the replaced text" tool="pattern-tester" onUse={() => {
+                  telemetry.touch(flavor); telemetry.complete(true, flavor);
+                }} />
               </h2>
               <pre className="tool-output">{decode(report.gsub.bytes)}</pre>
             </>
@@ -279,9 +334,12 @@ return { squares = squares, total = #squares }`
 ];
 
 function TableToJson() {
+  const telemetry = useToolTelemetry("table-to-json");
   const [fromLua, setFromLua] = useState(true);
   const [input, setInput] = useState(SAMPLE_TABLE);
-  const { value: converted, pending } = useScriptRun(fromLua ? buildLuaToJsonScript(input) : null, "lua54", parseLuaToJsonOutput);
+  const direction = fromLua ? "lua-to-json" : "json-to-lua";
+  const { value: converted, pending } = useScriptRun(fromLua ? buildLuaToJsonScript(input) : null, "lua54", parseLuaToJsonOutput,
+    (value) => telemetry.complete(value.ok, "lua54", "lua-to-json"));
   const fromJson = useMemo(() => {
     if (fromLua) return null;
     try {
@@ -290,6 +348,9 @@ function TableToJson() {
       return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
     }
   }, [fromLua, input]);
+  useEffect(() => {
+    if (fromJson) telemetry.complete(fromJson.ok, "lua54", "json-to-lua");
+  }, [fromJson]);
 
   const output = fromLua
     ? converted && (converted.ok ? { ok: true as const, text: converted.json } : converted)
@@ -298,6 +359,9 @@ function TableToJson() {
 
   // The converted text becomes the next input, so a round trip is one click.
   const swap = () => {
+    const next = fromLua ? "json-to-lua" : "lua-to-json";
+    telemetry.touch("lua54", next);
+    trackEvent("tool_direction", { tool: "table-to-json", direction: next });
     if (outputText) setInput(outputText);
     setFromLua((current) => !current);
   };
@@ -308,7 +372,11 @@ function TableToJson() {
         <div className="tool-presets" role="group" aria-label="Example tables">
           <span>Try</span>
           {TABLE_PRESETS.map(([label, source]) => (
-            <button className={`chip${source === input ? " is-active" : ""}`} type="button" key={label} onClick={() => setInput(source)}>
+            <button className={`chip${source === input ? " is-active" : ""}`} type="button" key={label} onClick={() => {
+              telemetry.touch("lua54", direction);
+              trackEvent("tool_preset", { tool: "table-to-json", preset: TABLE_PRESETS.findIndex(([name]) => name === label) + 1 });
+              setInput(source);
+            }}>
               {label}
             </button>
           ))}
@@ -325,7 +393,7 @@ function TableToJson() {
           <textarea
             className="tool-mono tool-source"
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={(event) => { telemetry.touch("lua54", direction); setInput(event.target.value); }}
             spellCheck={false}
             aria-label={fromLua ? "Lua table to convert" : "JSON to convert"}
           />
@@ -333,7 +401,9 @@ function TableToJson() {
         <section className="tool-panel" aria-label={fromLua ? "JSON" : "Lua table"} aria-busy={fromLua && pending}>
           <div className="tool-heading-row">
             <h2 className="tool-heading">{fromLua ? "JSON" : "Lua table"}</h2>
-            <CopyButton text={outputText} label={fromLua ? "Copy JSON" : "Copy Lua table"} />
+            <CopyButton text={outputText} label={fromLua ? "Copy JSON" : "Copy Lua table"} tool="table-to-json" direction={direction} onUse={() => {
+              telemetry.touch("lua54", direction); telemetry.complete(true, "lua54", direction);
+            }} />
           </div>
           {!output ? (
             <p className="tool-note">Loading Lua 5.4…</p>

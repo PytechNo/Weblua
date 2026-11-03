@@ -3,6 +3,7 @@ import { Landing } from "./components/Landing";
 import { PlaygroundShell } from "./components/PlaygroundShell";
 import { getAppRoute, isStandaloneTool } from "./lib/routes";
 import { useTheme } from "./lib/theme";
+import { observePageTelemetry } from "./lib/pageTelemetry";
 
 /**
  * The playground pulls in CodeMirror, the lint extensions, and the runtime
@@ -28,6 +29,7 @@ export function App({ prerendered = "" }: AppProps) {
   const isEmbed = route.mode === "embed";
   const tool = route.mode === "playground" ? route.tool : undefined;
   const { theme, toggleTheme } = useTheme();
+  useEffect(observePageTelemetry, []);
 
   // Fetch the playground chunk once the landing page is idle, so the hero CTA
   // still navigates into a warm cache without competing for the main thread

@@ -97,7 +97,7 @@ function HeroCodeWindow() {
   }
 
   return (
-    <div className="hero-window" onClick={() => setLive(true)}>
+    <div className="hero-window" data-track="try_demo" data-track-place="hero" onClick={() => setLive(true)}>
       <div className="hero-window-bar">
         <span className="window-dots" aria-hidden="true">
           <i />
@@ -361,7 +361,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
 
       <main id="main">
         {/* ---------- Hero ---------- */}
-        <section className="hero" aria-labelledby="hero-title">
+        <section className="hero" data-read="hero" data-track-place="hero" aria-labelledby="hero-title">
           <div className="ambient" aria-hidden="true">
             <span className="orb orb-a" />
             <span className="orb orb-b" />
@@ -448,7 +448,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- Features ---------- */}
-        <section className="section" id="features" aria-labelledby="features-title">
+        <section className="section" id="features" data-read="features" aria-labelledby="features-title">
           <div className="section-head reveal">
             <span className="eyebrow">Features</span>
             <h2 id="features-title">
@@ -478,7 +478,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- Comparison ---------- */}
-        <section className="section" id="compare" aria-labelledby="compare-title">
+        <section className="section" id="compare" data-read="compare" aria-labelledby="compare-title">
           <div className="section-head reveal">
             <span className="eyebrow">Compare</span>
             <h2 id="compare-title">
@@ -536,7 +536,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- Product showcase ---------- */}
-        <section className="section showcase" aria-labelledby="showcase-title">
+        <section className="section showcase" data-read="showcase" aria-labelledby="showcase-title">
           <div className="section-head reveal">
             <span className="eyebrow">Showcase</span>
             <h2 id="showcase-title">
@@ -553,7 +553,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 aria-selected={activeTab === "run"}
                 aria-controls="panel-run"
                 className={activeTab === "run" ? "is-active" : ""}
-                onClick={() => setActiveTab("run")}
+                data-track="showcase_tab" data-track-tab="run" onClick={() => setActiveTab("run")}
               >
                 <Play size={14} />
                 Run
@@ -565,7 +565,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 aria-selected={activeTab === "share"}
                 aria-controls="panel-share"
                 className={activeTab === "share" ? "is-active" : ""}
-                onClick={() => setActiveTab("share")}
+                data-track="showcase_tab" data-track-tab="share" onClick={() => setActiveTab("share")}
               >
                 <Share2 size={14} />
                 Share
@@ -577,7 +577,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
                 aria-selected={activeTab === "embed"}
                 aria-controls="panel-embed"
                 className={activeTab === "embed" ? "is-active" : ""}
-                onClick={() => setActiveTab("embed")}
+                data-track="showcase_tab" data-track-tab="embed" onClick={() => setActiveTab("embed")}
               >
                 <Code2 size={14} />
                 Embed
@@ -715,7 +715,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- How it works ---------- */}
-        <section className="section" id="how" aria-labelledby="how-title">
+        <section className="section" id="how" data-read="how" aria-labelledby="how-title">
           <div className="section-head reveal">
             <span className="eyebrow">How it works</span>
             <h2 id="how-title">
@@ -734,7 +734,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- Boundaries ---------- */}
-        <section className="section" aria-labelledby="boundaries-title">
+        <section className="section" data-read="boundaries" aria-labelledby="boundaries-title">
           <div className="section-head reveal">
             <span className="eyebrow">Scope</span>
             <h2 id="boundaries-title">
@@ -757,7 +757,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- Access ---------- */}
-        <section className="section" id="access" aria-labelledby="access-title">
+        <section className="section" id="access" data-read="access" data-track-place="access" aria-labelledby="access-title">
           <div className="section-head reveal">
             <span className="eyebrow">Access</span>
             <h2 id="access-title">
@@ -804,7 +804,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- FAQ ---------- */}
-        <section className="section section-narrow" id="faq" aria-labelledby="faq-title">
+        <section className="section section-narrow" id="faq" data-read="faq" aria-labelledby="faq-title">
           <div className="section-head reveal">
             <span className="eyebrow">Questions</span>
             <h2 id="faq-title">
@@ -825,7 +825,7 @@ export function Landing({ theme, onToggleTheme }: LandingProps) {
         </section>
 
         {/* ---------- Final CTA ---------- */}
-        <section className="cta-band reveal" aria-labelledby="cta-title">
+        <section className="cta-band reveal" data-read="final" data-track-place="final" aria-labelledby="cta-title">
           <div className="cta-inner">
             <span className="cta-glow" aria-hidden="true" />
             <Cpu size={22} aria-hidden="true" className="cta-icon" />

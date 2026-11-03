@@ -80,6 +80,7 @@ build packs since the build runs inside the same env context):
 | `VITE_SENTRY_DSN` | optional | Enables Sentry error reporting |
 | `VITE_UMAMI_SCRIPT_URL` | optional | Umami tracker URL, e.g. `https://umami.example.com/script.js` |
 | `VITE_UMAMI_WEBSITE_ID` | optional | Umami website ID; Umami loads only when both Umami values are set |
+| `VITE_ANALYTICS_DOMAINS` | optional | Limit telemetry to these comma-separated hostnames, e.g. `weblua.com,www.weblua.com`; excludes staging hosts when set |
 
 Leave them all unset if you don't want analytics/error reporting — the app runs fine without
 them (see [.env.example](../.env.example)).
@@ -87,6 +88,11 @@ them (see [.env.example](../.env.example)).
 If you change any of these values later, you must **redeploy** (trigger a rebuild), not just
 restart — a runtime restart won't pick up new `VITE_*` values since they're already
 baked into the built JS.
+
+Telemetry is disabled by the development server. To exclude your own browser from the
+production site, visit `https://weblua.com/?analytics=off` once in each browser/profile.
+Use `?analytics=on` to count it again. Privacy signals (GPC/DNT) still take precedence.
+See [analytics](analytics.md) for events, performance support, funnels, and smoke checks.
 
 ## 4. Pin the Node version
 

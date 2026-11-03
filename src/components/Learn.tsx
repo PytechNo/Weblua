@@ -4,6 +4,7 @@ import { ALL_PASSED, exerciseId, exerciseSource } from "../lib/articles";
 import type { ArticlePage, Lookup, Quiz, Trace, TraceValue } from "../lib/articleTypes";
 import { type TraceFrame, traceStates } from "../lib/trace";
 import { Inline, LuaCode } from "./Code";
+import { trackEvent } from "../lib/telemetry";
 
 // ---------------------------------------------------------------------------
 // Progress: which lessons' exercises have passed, kept in this browser
@@ -25,6 +26,7 @@ function readDone(): string[] {
 function markDone(slug: string) {
   const done = readDone();
   if (done.includes(slug)) return;
+  trackEvent("lesson_complete", { lesson: slug });
   try {
     window.localStorage.setItem(PROGRESS_KEY, JSON.stringify([...done, slug]));
   } catch {
@@ -121,7 +123,7 @@ function FrameView({ frame }: { frame: TraceFrame }) {
  * what it printed. Plays once by itself when it scrolls into view, unless the
  * reader prefers reduced motion; every step is also listed as text below it.
  */
-export function TraceStage({ trace }: { trace: Trace }) {
+export function TraceStage({ trace, id = "course-preview" }: { trace: Trace; id?: string }) {
   const states = useMemo(() => traceStates(trace), [trace]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -155,11 +157,13 @@ export function TraceStage({ trace }: { trace: Trace }) {
   }, [playing, index, last, trace.steps]);
 
   const go = (next: number) => {
+    if (!touched.current) trackEvent("walkthrough", { block: id, action: "step" });
     touched.current = true;
     setPlaying(false);
     setIndex(Math.max(0, Math.min(last, next)));
   };
   const toggle = () => {
+    if (!touched.current) trackEvent("walkthrough", { block: id, action: "play" });
     touched.current = true;
     if (playing) {
       setPlaying(false);
@@ -273,7 +277,7 @@ export function TraceStage({ trace }: { trace: Trace }) {
 // QuizCard: predict the output, with feedback
 // ---------------------------------------------------------------------------
 
-export function QuizCard({ quiz }: { quiz: Quiz }) {
+export function QuizCard({ quiz, id = "quiz" }: { quiz: Quiz; id?: string }) {
   const [picked, setPicked] = useState<number[]>([]);
   const solved = picked.includes(quiz.answer);
   const lastPick = picked.at(-1);
@@ -303,7 +307,11 @@ export function QuizCard({ quiz }: { quiz: Quiz }) {
               key={index}
               disabled={solved && index !== quiz.answer}
               aria-pressed={picked.includes(index)}
-              onClick={() => setPicked((current) => (current.includes(index) ? current : [...current, index]))}
+              onClick={() => {
+                if (picked.includes(index)) return;
+                trackEvent("quiz_attempt", { block: id, result: index === quiz.answer ? "correct" : "incorrect", attempts: picked.length + 1 });
+                setPicked((current) => [...current, index]);
+              }}
             >
               <span className="quiz-letter" aria-hidden="true">
                 {state === " is-right" ? <Check size={14} /> : state === " is-wrong" ? <X size={14} /> : "ABCDEF"[index]}
@@ -316,7 +324,7 @@ export function QuizCard({ quiz }: { quiz: Quiz }) {
       <p className="quiz-feedback" aria-live="polite">
         {solved ? "Right." : lastPick !== undefined ? "Not quite. Try another one." : ""}
       </p>
-      <details className="quiz-why" open={solved}>
+      <details className="quiz-why" open={solved} data-track={solved ? undefined : "quiz_answer"} data-track-block={id}>
         <summary>{solved ? "Why" : "Show the answer"}</summary>
         <p>
           The answer is {quiz.code ? <code>{quiz.options[quiz.answer]}</code> : <strong><Inline text={quiz.options[quiz.answer]} /></strong>}.{" "}
@@ -333,7 +341,7 @@ export function QuizCard({ quiz }: { quiz: Quiz }) {
 
 const HOP_MS = 950;
 
-export function LookupDemo({ lookup }: { lookup: Lookup }) {
+export function LookupDemo({ lookup, id = "lookup" }: { lookup: Lookup; id?: string }) {
   const [key, setKey] = useState<string | null>(null);
   const [hop, setHop] = useState(-1);
   const { chain } = lookup;
@@ -348,6 +356,7 @@ export function LookupDemo({ lookup }: { lookup: Lookup }) {
   }, [key, hop, end]);
 
   const start = (next: string) => {
+    trackEvent("lookup_try", { block: id });
     setKey(next);
     setHop(-1);
   };
@@ -424,6 +433,7 @@ interface ExerciseCardProps {
 
 export function ExerciseCard({ page, next }: ExerciseCardProps) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const results = useRef(new Set<string>());
   const done = useLessonsDone().includes(page.slug);
 
   useEffect(() => {
@@ -433,7 +443,15 @@ export function ExerciseCard({ page, next }: ExerciseCardProps) {
       const data: unknown = event.data;
       if (typeof data !== "object" || data === null) return;
       const { type, output } = data as { type?: unknown; output?: unknown };
-      if (type === "weblua:run" && typeof output === "string" && output.includes(ALL_PASSED)) markDone(page.slug);
+      if (type === "weblua:run" && typeof output === "string") {
+        const passed = output.includes(ALL_PASSED);
+        const status = passed ? "passed" : "failed";
+        if (!results.current.has(status)) {
+          results.current.add(status);
+          trackEvent("exercise_result", { lesson: page.slug, status });
+          if (passed) markDone(page.slug);
+        }
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -441,7 +459,7 @@ export function ExerciseCard({ page, next }: ExerciseCardProps) {
 
   if (!page.exercise) return null;
   return (
-    <section className={`exercise${done ? " is-done" : ""}`} id="exercise" aria-labelledby="exercise-title">
+    <section className={`exercise${done ? " is-done" : ""}`} id="exercise" data-read="exercise" aria-labelledby="exercise-title">
       <p className="exercise-kicker">Your turn</p>
       <h2 id="exercise-title">Exercise</h2>
       <p>
@@ -470,7 +488,7 @@ export function ExerciseCard({ page, next }: ExerciseCardProps) {
           <span>Not passed yet. Run your code to check it.</span>
         )}
       </div>
-      <details className="exercise-solution">
+      <details className="exercise-solution" data-track="solution_reveal" data-track-block={page.slug}>
         <summary>Show a solution</summary>
         <pre>
           <code>

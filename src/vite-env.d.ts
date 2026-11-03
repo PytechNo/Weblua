@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_SENTRY_DSN?: string;
   readonly VITE_UMAMI_SCRIPT_URL?: string;
   readonly VITE_UMAMI_WEBSITE_ID?: string;
+  readonly VITE_ANALYTICS_DOMAINS?: string;
 }
 
 interface ImportMeta {

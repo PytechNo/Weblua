@@ -13,6 +13,7 @@ import {
 } from "../lib/articles";
 import type { ArticleSection, ComparePage, PlaygroundTool, ToolPage } from "../lib/routes";
 import type { Theme } from "../lib/theme";
+import { trackEvent } from "../lib/telemetry";
 import { headingId, Inline, LuaCode, plainText } from "./Code";
 import { ExerciseCard, LookupDemo, QuizCard, TraceStage, useLessonsDone } from "./Learn";
 import { SiteFrame } from "./SiteFrame";
@@ -44,7 +45,10 @@ function CodeBlockView({ code, id }: { code: CodeBlock; id: string }) {
         <span className="code-card-runtime">{FLAVOR_LABELS[code.flavor]}</span>
         <span className="code-card-actions">
           {!live && (
-            <button className="button button-primary code-card-run" type="button" onClick={() => setLive(true)}>
+            <button className="button button-primary code-card-run" type="button" onClick={() => {
+              trackEvent("example_try", { example: id, flavor: code.flavor });
+              setLive(true);
+            }}>
               <Play size={14} /> Run it here
             </button>
           )}
@@ -103,7 +107,7 @@ function Cell({ text, header }: { text: string; header?: boolean }) {
 
 function BlockView({ block, id }: { block: ArticleBlock; id: string }) {
   return (
-    <section className="block" id={block.heading ? headingId(block.heading) : undefined}>
+    <section className="block" data-read={id} id={block.heading ? headingId(block.heading) : undefined}>
       {block.heading && <h2>{block.heading}</h2>}
       {block.text?.map((paragraph, index) => (
         <p key={index}>
@@ -143,8 +147,8 @@ function BlockView({ block, id }: { block: ArticleBlock; id: string }) {
           </table>
         </div>
       )}
-      {block.trace && <TraceStage trace={block.trace} />}
-      {block.lookup && <LookupDemo lookup={block.lookup} />}
+      {block.trace && <TraceStage trace={block.trace} id={id} />}
+      {block.lookup && <LookupDemo lookup={block.lookup} id={id} />}
       {block.code && <CodeBlockView code={block.code} id={id} />}
       {block.embed && (
         <figure className="embed-card">
@@ -160,7 +164,7 @@ function BlockView({ block, id }: { block: ArticleBlock; id: string }) {
           </figcaption>
         </figure>
       )}
-      {block.quiz && <QuizCard quiz={block.quiz} />}
+      {block.quiz && <QuizCard quiz={block.quiz} id={id} />}
       {block.note && (
         <aside className="note">
           <Lightbulb size={18} aria-hidden="true" />
