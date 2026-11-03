@@ -176,12 +176,14 @@ export function initTelemetry(): void {
     script.dataset.beforeSend = "webluaBeforeSend";
     if (import.meta.env.VITE_ANALYTICS_DOMAINS) script.dataset.domains = import.meta.env.VITE_ANALYTICS_DOMAINS;
     let counted: string | undefined;
-    let timed = false;
+    let timed: string | undefined;
     window.webluaBeforeSend = (type, original) => {
       if (telemetryDisabled() || type === "identify") return null;
       // A lesson's or article's own editor is part of that page's visit: its events count, not a view or speed of its own.
       if (!original.name && context().surface === "site-embed") return null;
       const payload = { ...original };
+      // Once anything calls umami.identify, Umami puts that visitor ID on every later payload, not just the identify call.
+      delete payload.id;
       if (payload.url) {
         const url = new URL(payload.url, location.href);
         // toString, not .size: Safari before 17 has no URLSearchParams.size and would drop every campaign.
@@ -195,8 +197,9 @@ export function initTelemetry(): void {
         payload.referrer = from.origin === location.origin ? "" : from.origin;
       } catch { payload.referrer = ""; }
       if (type === "performance") {
-        if (timed) return null;
-        timed = true;
+        // Umami reports speed again after every address change; keep one report per page view, as for the views.
+        if (payload.url === timed) return null;
+        timed = payload.url;
       } else if (!payload.name) {
         if (payload.url === counted) return null;
         counted = payload.url;

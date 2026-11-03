@@ -43,6 +43,7 @@ export function observePageTelemetry(): () => void {
   window.addEventListener("appinstalled", installed);
 
   const observed = new WeakSet<Element>();
+  let scrolled = false;
   const reading = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver((entries) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
@@ -52,9 +53,11 @@ export function observePageTelemetry(): () => void {
     }
   }, { rootMargin: "0px 0px -40% 0px" });
   const observe = (element: Element) => {
-    if (!observed.has(element)) { observed.add(element); reading?.observe(element); }
+    if (scrolled && !observed.has(element)) { observed.add(element); reading?.observe(element); }
   };
-  document.querySelectorAll("[data-read]").forEach(observe);
+  // Umami 3.3+ treats any event as engagement: parts count from the first scroll, so a visit that never scrolls stays a bounce.
+  const start = () => { scrolled = true; document.querySelectorAll("[data-read]").forEach(observe); };
+  document.addEventListener("scroll", start, { capture: true, once: true, passive: true });
   // Scan only added subtrees: typing and animated lessons must not rescan the whole page.
   const mutations = new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => {
     if (!(node instanceof Element)) return;
@@ -66,6 +69,7 @@ export function observePageTelemetry(): () => void {
     document.removeEventListener("click", click);
     document.removeEventListener("toggle", toggle, true);
     window.removeEventListener("appinstalled", installed);
+    document.removeEventListener("scroll", start, true);
     reading?.disconnect();
     mutations.disconnect();
   };

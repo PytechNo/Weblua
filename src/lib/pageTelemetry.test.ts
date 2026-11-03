@@ -46,6 +46,8 @@ describe("page interaction telemetry", () => {
     question.open = true;
     question.dispatchEvent(new Event("toggle"));
     question.dispatchEvent(new Event("toggle"));
+    expect(observed).toHaveLength(0);
+    document.dispatchEvent(new Event("scroll"));
     intersect([{ target: observed[0], isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
     intersect([{ target: observed[0], isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
     document.body.insertAdjacentHTML("beforeend", '<section data-read="article-end"></section><details data-track="solution_reveal" data-track-block="tables"><summary>Answer</summary></details>');

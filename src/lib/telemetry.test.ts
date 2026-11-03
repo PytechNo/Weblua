@@ -162,7 +162,8 @@ describe("analytics delivery and controls", () => {
     const payload = window.webluaBeforeSend!("event", {
       url: "https://weblua.com/playground?code=private&token=secret&utm_source=test#c=source",
       referrer: "https://other.example/private?token=secret#source",
-      title: "My private project"
+      title: "My private project",
+      id: "private-visitor"
     });
     expect(payload).toMatchObject({
       url: "https://weblua.com/playground?utm_source=test", referrer: "https://other.example", title: "Weblua /playground"
@@ -171,6 +172,8 @@ describe("analytics delivery and controls", () => {
     expect(window.webluaBeforeSend!("event", { url: "https://weblua.com/playground?utm_source=test#c=different" })).toBeNull();
     expect(window.webluaBeforeSend!("performance", { url: "/playground", lcp: 123 })).toMatchObject({ lcp: 123 });
     expect(window.webluaBeforeSend!("performance", { url: "/playground" })).toBeNull();
+    // A tool switch is a new page view, so it gets its own speed report.
+    expect(window.webluaBeforeSend!("performance", { url: "/", inp: 40 })).toMatchObject({ inp: 40 });
     expect(window.webluaBeforeSend!("identify", {})).toBeNull();
     expect(window.webluaBeforeSend!("event", { name: "run", referrer: location.origin + "/?token=secret" })!.referrer).toBe("");
   });

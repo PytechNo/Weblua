@@ -25,8 +25,10 @@ and raw error messages are never event properties.
 Every Umami payload strips fragments and all query parameters except `utm_source`,
 `utm_medium`, `utm_campaign`, `utm_term`, and `utm_content`. Titles are fixed route labels.
 Same-site referrers are removed; external referrers keep only the origin. Duplicate page views
-caused by share/gist hash changes are suppressed, and performance is reported once per page.
-Identification payloads are refused. Plausible retains its existing policy of not loading
+caused by share/gist hash changes are suppressed, and performance is reported once per page
+view: Umami reports speed again after every address change, so a tool switch gets its own
+report (responsiveness and layout shifts only; load timings belong to the first page).
+Identification payloads are refused, and any visitor ID is stripped from other payloads. Plausible retains its existing policy of not loading
 on source-bearing URLs; Umami is the recommended provider for the complete tracking setup.
 
 Events waiting for either script are queued separately in memory, up to 100 per provider,
@@ -41,12 +43,17 @@ All custom events include a sanitized `page` and `surface`. Embedded editors dis
 Only resolved built-in examples supply an `example` ID. `trigger: auto|manual` distinguishes
 article autoruns from user-initiated runs. IDs below refer to shipped public content only.
 
+Umami 3.3+ counts a visit with any custom event as engaged, never a bounce. `read` therefore
+starts at the visitor's first scroll. Article autoruns follow the visitor's "Run it here" click.
+Only `content_open` fires on its own, so visits that open a share, gist or example link
+never count as bounces.
+
 | Event | When / properties |
 | --- | --- |
 | `playground_cta` | Link to the playground, Lua, or Luau editor; `place`: hero, nav, content, aside, access, final, footer. Destination page views still count separately. |
 | `try_demo` | Landing hero becomes interactive; `place: hero`. |
 | `showcase_tab` | Landing showcase tab selected; `tab: run|share|embed`. |
-| `read` | A marked landing section or article block enters the reading area, once per part per page; `part`. Includes lazy content and exercises. Visibility is a reading proxy, not proof of reading. |
+| `read` | After the visitor's first scroll, a marked landing section or article block is in or enters the reading area, once per part per page; `part`. Includes lazy content and exercises. Visibility is a reading proxy, not proof of reading. |
 | `faq` | A question opened, once per question per page; numeric `question` within that page. |
 | `outbound` | External HTTP(S) link clicked; destination hostname `to`, `place`. Never the full link. |
 | `app_installed` | Browser emits `appinstalled`; browser support varies. |
