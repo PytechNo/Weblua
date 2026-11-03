@@ -190,6 +190,23 @@ describe("analytics delivery and controls", () => {
     });
   });
 
+  it("counts a same-site embedded editor's events but no page view or speed of its own", () => {
+    const referrer = vi.spyOn(document, "referrer", "get").mockReturnValue(location.origin + "/learn-luau/tables");
+    window.history.replaceState(null, "", "/embed");
+    telemetry.initTelemetry();
+    expect(window.webluaBeforeSend!("event", { url: location.href })).toBeNull();
+    expect(window.webluaBeforeSend!("performance", { url: location.href })).toBeNull();
+    expect(window.webluaBeforeSend!("event", { url: location.href, name: "run" })).not.toBeNull();
+    referrer.mockReturnValue("https://blog.example/post");
+    expect(window.webluaBeforeSend!("event", { url: location.href })).toMatchObject({ url: `${location.origin}/embed` });
+  });
+
+  it("keeps campaign tags without URLSearchParams.size (Safari before 17)", () => {
+    telemetry.initTelemetry();
+    vi.spyOn(URLSearchParams.prototype, "size", "get").mockReturnValue(undefined as unknown as number);
+    expect(window.webluaBeforeSend!("event", { url: "https://weblua.com/?utm_source=test" })!.url).toBe("https://weblua.com/?utm_source=test");
+  });
+
   it("queues each provider independently and contains provider errors", () => {
     vi.stubEnv("VITE_PLAUSIBLE_DOMAIN", "weblua.com");
     telemetry.initTelemetry();

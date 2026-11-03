@@ -4,7 +4,7 @@ Weblua is a static, client-side single-page app (Vite + React). Project executio
 persistence run in the browser—there is no Node execution server to keep alive in
 production, so Coolify only needs to build the app and serve the resulting `dist/` folder
 as static files. Source-only project sharing uses the URL fragment, so there is no project
-backend or database to provision. Optional Plausible and Sentry integrations can still
+backend or database to provision. Optional Umami, Plausible and Sentry integrations can still
 send sanitized usage/error telemetry when explicitly configured.
 
 ## Prerequisites

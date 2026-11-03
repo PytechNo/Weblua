@@ -85,7 +85,9 @@ article autoruns from user-initiated runs. IDs below refer to shipped public con
   `action_failed` by action/reason. `content_open` measures recipients separately.
 - Adoption: `project` by action and `file` by action; runtime, type mode, and bytecode use.
 - Separate manual editor usage from automatic examples using `surface`, `parentPage`,
-  `example`, and `trigger`; iframe page views are additional page views.
+  `example`, and `trigger`. An editor embedded in a Weblua page sends its events but no
+  page view or performance of its own, so lessons don't double their views or end on
+  `/embed`. An editor embedded on another site still counts as an `/embed` page view.
 - Performance: LCP/INP/CLS by route and device. Configure reports in the dashboard;
   this repository does not provision Umami dashboards, retention, or server settings.
 

@@ -179,11 +179,14 @@ export function initTelemetry(): void {
     let timed = false;
     window.webluaBeforeSend = (type, original) => {
       if (telemetryDisabled() || type === "identify") return null;
+      // A lesson's or article's own editor is part of that page's visit: its events count, not a view or speed of its own.
+      if (!original.name && context().surface === "site-embed") return null;
       const payload = { ...original };
       if (payload.url) {
         const url = new URL(payload.url, location.href);
-        const query = new URLSearchParams([...url.searchParams].filter(([key]) => /^utm_(source|medium|campaign|term|content)$/.test(key)));
-        payload.url = url.origin + analyticsPath(url.pathname) + (query.size ? `?${query}` : "");
+        // toString, not .size: Safari before 17 has no URLSearchParams.size and would drop every campaign.
+        const query = new URLSearchParams([...url.searchParams].filter(([key]) => /^utm_(source|medium|campaign|term|content)$/.test(key))).toString();
+        payload.url = url.origin + analyticsPath(url.pathname) + (query ? `?${query}` : "");
       }
       // Titles and referrers must not contain a project name, query or source fragment.
       payload.title = `Weblua ${analyticsPath(location.pathname)}`;

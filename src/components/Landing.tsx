@@ -210,7 +210,7 @@ const FEATURES = [
   {
     icon: Lock,
     title: "Source stays local",
-    body: "Normal execution has no code-upload backend. Deployments can optionally enable anonymous Plausible usage events and sanitized Sentry error reports; neither integration intentionally includes project source."
+    body: "Normal execution has no code-upload backend. Deployments can optionally enable anonymous Umami or Plausible usage events and sanitized Sentry error reports; none of them intentionally includes project source."
   },
   {
     icon: Keyboard,
@@ -273,7 +273,7 @@ const FAQS = [
   },
   {
     q: "Does my code get sent to an execution server?",
-    a: "Normal execution does not upload project source to an execution backend. Sharing compresses source into the URL fragment, which is not part of the HTTP request. Opening a #gist= link downloads that gist from GitHub's API. A deployment owner may optionally enable Plausible usage events and sanitized Sentry error reports; project source is not intentionally included."
+    a: "Normal execution does not upload project source to an execution backend. Sharing compresses source into the URL fragment, which is not part of the HTTP request. Opening a #gist= link downloads that gist from GitHub's API. A deployment owner may optionally enable Umami or Plausible usage events and sanitized Sentry error reports; project source is not intentionally included. weblua.com uses Umami without cookies, honors Global Privacy Control and Do Not Track, and stops counting your browser once you open weblua.com/?analytics=off."
   },
   {
     q: "Which Lua versions does Weblua support?",
