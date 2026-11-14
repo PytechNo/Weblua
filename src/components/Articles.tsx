@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, BadgeCheck, BookOpen, Check, ChevronDown, Clock, ExternalLink, Lightbulb, Play } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import {
   type ArticleBlock,
   type ArticleHub,
@@ -15,7 +15,17 @@ import type { ArticleSection, ComparePage, PlaygroundTool, ToolPage } from "../l
 import type { Theme } from "../lib/theme";
 import { trackEvent } from "../lib/telemetry";
 import { headingId, Inline, LuaCode, plainText } from "./Code";
-import { ExerciseCard, LookupDemo, QuizCard, TraceStage, useLessonsDone } from "./Learn";
+import {
+  ExerciseCard,
+  LessonWorkspace,
+  LookupDemo,
+  QuizCard,
+  TraceStage,
+  type TryExample,
+  TryItContext,
+  useLessonsDone,
+  type WorkspaceView
+} from "./Learn";
 import { SiteFrame } from "./SiteFrame";
 
 const FLAVOR_LABELS: Record<string, string> = { lua51: "Lua 5.1", lua52: "Lua 5.2", lua53: "Lua 5.3", lua54: "Lua 5.4", lua55: "Lua 5.5", luau: "Luau" };
@@ -28,6 +38,7 @@ function isErrorOutput(output: string): boolean {
 
 function CodeBlockView({ code, id }: { code: CodeBlock; id: string }) {
   const [live, setLive] = useState(false);
+  const tryInEditor = useContext(TryItContext);
   const outputs = Object.entries(code.outputs) as Array<[ShownFlavor, string]>;
   const compare = outputs.map(([flavor]) => flavor).find((flavor) => flavor !== code.flavor) ?? code.compare;
   const hash = `example=${encodeURIComponent(id)}${compare ? `&compare=${compare}` : ""}`;
@@ -47,9 +58,10 @@ function CodeBlockView({ code, id }: { code: CodeBlock; id: string }) {
           {!live && (
             <button className="button button-primary code-card-run" type="button" onClick={() => {
               trackEvent("example_try", { example: id, flavor: code.flavor });
-              setLive(true);
+              if (tryInEditor) tryInEditor({ id, hash });
+              else setLive(true);
             }}>
-              <Play size={14} /> Run it here
+              <Play size={14} /> {tryInEditor ? "Try it" : "Run it here"}
             </button>
           )}
           <a className="button code-card-open" href={`/playground#${hash}`} title="Open in the full playground">
@@ -474,66 +486,79 @@ function LessonPage({ hub, index }: { hub: ArticleHub; index: number }) {
   const page = hub.pages[index];
   const previous = hub.pages[index - 1];
   const next = hub.pages[index + 1];
+  const [example, setExample] = useState<TryExample | null>(null);
+  const [view, setView] = useState<WorkspaceView>({ tab: "exercise", open: false });
+  const [output, setOutput] = useState<string | null>(null);
+  const tryInEditor = useCallback((next: TryExample) => {
+    setExample(next);
+    setView({ tab: "example", open: true });
+  }, []);
+  const { exercise } = page;
   return (
     <main className="page lesson" id="content">
-      <div className="lesson-layout">
-        <aside className="lesson-aside">
-          <CourseRail pages={hub.pages} current={index} />
-        </aside>
-        <article className="prose">
-          <header className="page-hero lesson-hero">
-            <Crumbs trail={[["Learn Luau", "/learn-luau"]]} />
-            <p className="page-kicker">
-              Lesson {index + 1} of {hub.pages.length}
-            </p>
-            <h1>{page.title}</h1>
-            <p className="page-lead">
-              <Inline text={page.answer} />
-            </p>
-            <PageMeta minutes={page.minutes} />
-            {page.outcomes && (
-              <div className="outcomes">
-                <p className="answer-label">You'll learn to</p>
-                <ul>
-                  {page.outcomes.map((outcome) => (
-                    <li key={outcome}>
-                      <Check size={15} aria-hidden="true" /> <Inline text={outcome} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </header>
-          <PageBlocks page={page} prefix="learn-luau" />
-          <ExerciseCard page={page} next={next} />
-          <PageEnd page={page} />
-          <nav className="pager" aria-label="Lessons">
-            {previous ? (
-              <a href={`/learn-luau/${previous.slug}`}>
-                <span>Previous lesson</span>
-                <strong>
-                  <ArrowLeft size={15} /> {previous.title}
-                </strong>
-              </a>
-            ) : (
-              <a href="/learn-luau">
-                <span>Course</span>
-                <strong>
-                  <ArrowLeft size={15} /> All lessons
-                </strong>
-              </a>
-            )}
-            {next && (
-              <a className="is-next" href={`/learn-luau/${next.slug}`}>
-                <span>Next lesson</span>
-                <strong>
-                  {next.title} <ArrowRight size={15} />
-                </strong>
-              </a>
-            )}
-          </nav>
-        </article>
-      </div>
+      <TryItContext.Provider value={exercise ? tryInEditor : null}>
+        <div className="lesson-layout">
+          <div className="lesson-main">
+            <aside className="lesson-aside">
+              <CourseRail pages={hub.pages} current={index} />
+            </aside>
+            <article className="prose">
+              <header className="page-hero lesson-hero">
+                <Crumbs trail={[["Learn Luau", "/learn-luau"]]} />
+                <p className="page-kicker">
+                  Lesson {index + 1} of {hub.pages.length}
+                </p>
+                <h1>{page.title}</h1>
+                <p className="page-lead">
+                  <Inline text={page.answer} />
+                </p>
+                <PageMeta minutes={page.minutes} />
+                {page.outcomes && (
+                  <div className="outcomes">
+                    <p className="answer-label">You'll learn to</p>
+                    <ul>
+                      {page.outcomes.map((outcome) => (
+                        <li key={outcome}>
+                          <Check size={15} aria-hidden="true" /> <Inline text={outcome} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </header>
+              <PageBlocks page={page} prefix="learn-luau" />
+              <ExerciseCard page={page} next={next} output={output} onOpen={() => setView({ tab: "exercise", open: true })} />
+              <PageEnd page={page} />
+              <nav className="pager" aria-label="Lessons">
+                {previous ? (
+                  <a href={`/learn-luau/${previous.slug}`}>
+                    <span>Previous lesson</span>
+                    <strong>
+                      <ArrowLeft size={15} /> {previous.title}
+                    </strong>
+                  </a>
+                ) : (
+                  <a href="/learn-luau">
+                    <span>Course</span>
+                    <strong>
+                      <ArrowLeft size={15} /> All lessons
+                    </strong>
+                  </a>
+                )}
+                {next && (
+                  <a className="is-next" href={`/learn-luau/${next.slug}`}>
+                    <span>Next lesson</span>
+                    <strong>
+                      {next.title} <ArrowRight size={15} />
+                    </strong>
+                  </a>
+                )}
+              </nav>
+            </article>
+          </div>
+          {exercise && <LessonWorkspace page={{ ...page, exercise }} example={example} view={view} onView={setView} onOutput={setOutput} />}
+        </div>
+      </TryItContext.Provider>
     </main>
   );
 }

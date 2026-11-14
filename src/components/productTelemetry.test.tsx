@@ -6,7 +6,7 @@ import { lessonPages } from "../lib/lessonPages";
 import { runSnippet } from "../lib/runner";
 import { trackEvent } from "../lib/telemetry";
 import type { RunResult } from "../lib/types";
-import { ExerciseCard, QuizCard } from "./Learn";
+import { ExerciseCard, LessonWorkspace, QuizCard } from "./Learn";
 import Tools from "./Tools";
 
 vi.mock("../lib/telemetry", () => ({ trackEvent: vi.fn() }));
@@ -113,9 +113,9 @@ describe("feature adoption telemetry", () => {
     expect(JSON.stringify(vi.mocked(trackEvent).mock.calls)).not.toMatch(/Private text|Because/);
   });
 
-  it("accepts only the lesson's own iframe and counts a completion once", async () => {
+  it("accepts only the lesson's own exercise iframe and counts a completion once", async () => {
     const page = lessonPages[0];
-    await act(() => root.render(<StrictMode><ExerciseCard page={page} /></StrictMode>));
+    await act(() => root.render(<StrictMode>{lesson(page)}</StrictMode>));
     const frame = container.querySelector("iframe")!;
     async function message(output: string, origin = location.origin, source: Window | null = frame.contentWindow) {
       await act(() => window.dispatchEvent(new MessageEvent("message", { origin, source, data: { type: "weblua:run", output } })));
@@ -133,7 +133,7 @@ describe("feature adoption telemetry", () => {
 
   it("counts a lesson completion once even when saving browser progress is refused", async () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("storage refused"); });
-    await act(() => root.render(<ExerciseCard page={lessonPages[0]} />));
+    await act(() => root.render(lesson(lessonPages[0])));
     const frame = container.querySelector("iframe")!;
     for (let i = 0; i < 2; i++) await act(() => window.dispatchEvent(new MessageEvent("message", {
       origin: location.origin, source: frame.contentWindow, data: { type: "weblua:run", output: ALL_PASSED }
@@ -141,4 +141,28 @@ describe("feature adoption telemetry", () => {
     expect(events("lesson_complete")).toHaveLength(1);
     expect(container.textContent).toContain("Lesson complete");
   });
+
+  it("ticks off each check the exercise's latest run passed", async () => {
+    const page = lessonPages[0];
+    const outputs: Array<string | null> = [];
+    await act(() => root.render(lesson(page, (output) => outputs.push(output))));
+    const frame = container.querySelector("iframe")!;
+    const [first, second] = page.exercise!.checks.map(([label]) => label);
+    await act(() => window.dispatchEvent(new MessageEvent("message", {
+      origin: location.origin, source: frame.contentWindow, data: { type: "weblua:run", output: `✓ ${first}\n✗ ${second}` }
+    })));
+    expect(outputs).toEqual([`✓ ${first}\n✗ ${second}`]);
+    await act(() => root.render(<ExerciseCard page={page} output={outputs[0]} onOpen={() => {}} />));
+    expect([...container.querySelectorAll(".exercise-check")].map((item) => item.className)).toEqual(["exercise-check is-pass", "exercise-check is-fail"]);
+  });
 });
+
+/** A lesson's exercise card beside its editor, opened as on a phone so it loads at once. */
+function lesson(page: (typeof lessonPages)[number], onOutput: (output: string | null) => void = () => {}) {
+  return (
+    <>
+      <ExerciseCard page={page} output={null} onOpen={() => {}} />
+      <LessonWorkspace page={{ ...page, exercise: page.exercise! }} example={null} view={{ tab: "exercise", open: true }} onView={() => {}} onOutput={onOutput} />
+    </>
+  );
+}

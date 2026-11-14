@@ -310,6 +310,11 @@ function workspaceFromProject(project: ProjectPayload): Workspace {
   return { project, activeFile: project.entry, stdin: "" };
 }
 
+/** `project` with a lesson exercise's hidden checks after its entry file's code. */
+function withChecks(project: ProjectPayload, checks: string): ProjectPayload {
+  return checks ? { ...project, files: { ...project.files, [project.entry]: project.files[project.entry] + checks } } : project;
+}
+
 function runtimeLabel(flavor: RuntimeFlavor): string {
   return runtimeOptions.find((runtime) => runtime.value === flavor)?.label ?? flavor;
 }
@@ -351,6 +356,10 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   // Tool pages always open on their demo and never touch the draft, so a quick
   // format or check can't overwrite what the visitor left in /playground.
   const keepsDraft = !isEmbed && !tool;
+  // `/embed#…&lesson=1` is the editor beside a lesson: the code, Run, and the output, nothing else.
+  const [lesson] = useState(() => isEmbed && new URLSearchParams(window.location.hash.slice(1)).get("lesson") === "1");
+  /** A lesson exercise's checks, appended out of sight whenever the code runs or is linted. */
+  const checksRef = useRef("");
   const [workspace, setWorkspace] = useState<Workspace>(() => defaultWorkspace(tool));
   const [projects, setProjects] = useState<StoredWorkspaceProject[]>([]);
   const [result, setResult] = useState<RunResult | null>(null);
@@ -464,6 +473,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
           how, status: shared ? "ok" : "error", ...(shared ? { flavor: shared.flavor } : { reason: "invalid" })
         });
         if (shared) {
+          if (lesson && linkedExample && !("project" in linkedExample)) checksRef.current = linkedExample.checks ?? "";
           setWorkspace(workspaceFromProject(shared));
         } else if (draft) {
           setWorkspace(draft);
@@ -487,7 +497,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
     return () => {
       cancelled = true;
     };
-  }, [isEmbed, keepsDraft]);
+  }, [isEmbed, keepsDraft, lesson]);
 
   useEffect(() => {
     if (!isHydrated || !keepsDraft) return;
@@ -574,8 +584,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       };
 
       // Compare runs both runtimes at once, each in its own worker.
-      const handle = start(workspace.project, setResult);
-      const other = compareWith ? start({ ...workspace.project, flavor: compareWith }, setCompareResult) : null;
+      const project = withChecks(workspace.project, checksRef.current);
+      const handle = start(project, setResult);
+      const other = compareWith ? start({ ...project, flavor: compareWith }, setCompareResult) : null;
       if (!other) setCompareResult(null);
       runRef.current = {
         id: handle.id,
@@ -656,7 +667,12 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
 
     try {
       const isLuau = workspace.project.flavor === "luau";
-      const checked = await checkProject(workspace.project, workspace.activeFile, { typeMode });
+      const { entry, files } = workspace.project;
+      const checks = checksRef.current;
+      const checked = await checkProject(withChecks(workspace.project, checks), workspace.activeFile, { typeMode });
+      // Whatever the hidden checks themselves trip over is not the learner's to fix.
+      const shownLines = files[entry].split("\n").length;
+      if (checked && checks) checked.diagnostics = checked.diagnostics.filter((diagnostic) => (diagnostic.file ?? entry) !== entry || diagnostic.line <= shownLines);
       if (!checked) {
         trackEvent("check", { flavor: workspace.project.flavor, status: "error", reason: "unavailable", types: typeMode });
         setNotice("Check could not run. Try again.");
@@ -802,15 +818,17 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         // Only the open file is type-checked per keystroke, and a cold
         // analyzer is skipped rather than awaited; it forces a fresh pass
         // when it finishes loading.
+        // A lesson's hidden checks call the learner's functions, so they aren't flagged as unused.
+        const checks = activeFile === project.entry ? checksRef.current : "";
         const checked = await checkProject(
-          { ...project, files: { ...project.files, [activeFile]: source } },
+          { ...project, files: { ...project.files, [activeFile]: source + checks } },
           activeFile,
           { typeMode: typeModeRef.current, typeCheckFile: activeFile, background: true }
         );
         if (!checked || view.state.doc.toString() !== source) return [];
 
         return checked.diagnostics
-          .filter((diagnostic) => !diagnostic.file || diagnostic.file === activeFile)
+          .filter((diagnostic) => (!diagnostic.file || diagnostic.file === activeFile) && (!checks || diagnostic.line <= view.state.doc.lines))
           .map((diagnostic) => ({
             ...diagnosticRange(view.state.doc, diagnostic),
             severity: diagnostic.severity,
@@ -1415,20 +1433,26 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
         {compact ? (
           <div className="compact-top">
             <div className="compact-bar" aria-label="Playground controls">
-              {isEmbed && (
+              {isEmbed && !lesson && (
                 <a className="embed-brand" href={openInWebluaUrl} target="_blank" rel="noopener" title="Open this project in Weblua">
                   <MoonMark size={20} />
                   <span>Weblua</span>
                   <ExternalLink size={13} aria-hidden="true" />
                 </a>
               )}
-              <label className="compact-runtime">
-                <span className="visually-hidden">Runtime</span>
-                {runtimeSelect}
-              </label>
-              <button className="icon-button text-icon compact-menu-button" type="button" onClick={() => menuRef.current?.showModal()} aria-haspopup="dialog" title="Menu" aria-label="Menu">
-                <Menu size={19} />
-              </button>
+              {lesson ? (
+                <span className="compact-file">{workspace.activeFile}</span>
+              ) : (
+                <>
+                  <label className="compact-runtime">
+                    <span className="visually-hidden">Runtime</span>
+                    {runtimeSelect}
+                  </label>
+                  <button className="icon-button text-icon compact-menu-button" type="button" onClick={() => menuRef.current?.showModal()} aria-haspopup="dialog" title="Menu" aria-label="Menu">
+                    <Menu size={19} />
+                  </button>
+                </>
+              )}
               {runButton}
             </div>
             {tabbed && (
@@ -1444,7 +1468,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                 >
                   Output <span className={`status-dot status-${statusKind}`} aria-hidden="true" />
                 </button>
-                {isLuau && (
+                {isLuau && !lesson && (
                   <button
                     type="button"
                     aria-pressed={phonePane === "output" && showBytecode}
@@ -1683,7 +1707,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
               <span className={`status-dot status-${statusKind}`} aria-hidden="true" />
               <div>
                 {/* The tabbed layout has Bytecode as a top-level tab instead. */}
-                {isLuau && !tabbed ? (
+                {isLuau && !tabbed && !lesson ? (
                   <span className="output-tabs" role="group" aria-label="Output pane">
                     <button type="button" aria-pressed={!showBytecode} onClick={() => setOutputTab("output")}>Output</button>
                     <button type="button" aria-pressed={showBytecode} onClick={openBytecode} title="The bytecode Luau compiles the open file to">Bytecode</button>
@@ -1697,7 +1721,7 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
                     : isRunning ? "running..." : compareResult && result ? `${runtimeLabel(result.flavor)} vs ${runtimeLabel(compareResult.flavor)}` : result ? formatRunMeta(result) : compareWith ? `Runs on ${runtimeLabel(workspace.project.flavor)} and ${runtimeLabel(compareWith)}` : "Ready"}
                 </span>
               </div>
-              {!showBytecode && (
+              {!showBytecode && !lesson && (
                 <button className="button input-button" type="button" onClick={() => setInputOpen((open) => !open)} title={inputOpen ? "Hide preset input" : "Preset input for read calls"} aria-expanded={inputOpen}>
                   <Plus className={inputOpen ? "input-toggle is-open" : "input-toggle"} size={15} />
                   <span className="input-label">Input</span>

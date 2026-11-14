@@ -227,6 +227,8 @@ export interface BytecodeResponse {
 export interface ExampleSnippet extends SnippetPayload {
   id: string;
   title: string;
+  /** A lesson exercise's checks: hidden code a lesson embed appends to the file when it runs. */
+  checks?: string;
 }
 
 export interface ExampleProject {

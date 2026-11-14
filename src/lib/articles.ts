@@ -59,8 +59,8 @@ export const articleHubs: Record<ArticleSection, ArticleHub> = {
         list: [
           "**Watch it run.** Code walkthroughs play one line at a time and show the variables and output change as they go. Pause, step back, or drag the slider to any step.",
           "**Predict, then check.** Short quizzes ask what a snippet prints before you see it. Wrong guesses explain themselves.",
-          "**Write real code.** Each lesson ends with an exercise in an embedded Luau editor with the type checker on. Checks run when you press Run, and passing them all marks the lesson done.",
-          "**Try anything.** Every example has Run it here, which turns it into an editor so you can change it and see what happens."
+          "**Write real code.** A Luau editor with the type checker on sits beside every lesson, open on its exercise. Press Run and each check ticks off as your code passes it; passing them all marks the lesson done.",
+          "**Try anything.** Every example has Try it, which opens it in that editor so you can change it and see what happens."
         ]
       },
       {
@@ -106,14 +106,29 @@ export function exerciseId(slug: string): string {
   return `learn-luau/${slug}/exercise`;
 }
 
-/** The exercise file: the starter (or solution) and the checks that grade it. */
+/** The exercise as it runs: the starter (or solution) followed by the checks that grade it. */
 export function exerciseSource(exercise: Exercise, code = exercise.starter): string {
+  return code + exerciseChecks(exercise);
+}
+
+/** The task, from the comment block that opens the starter. */
+export function exerciseTask(exercise: Exercise): string {
+  const lines = exercise.starter.split("\n").filter((line) => !line.startsWith("--!"));
+  const end = lines.findIndex((line) => !line.startsWith("-- "));
+  return lines
+    .slice(0, end < 0 ? undefined : end)
+    .map((line) => line.slice(3))
+    .join(" ");
+}
+
+/** The checks a lesson's editor appends, out of sight, to the learner's code when it runs. */
+export function exerciseChecks(exercise: Exercise): string {
   const checks = exercise.checks
     .map(([label, body]) => `check(${JSON.stringify(label)}, function()\n  ${body}\nend)`)
     .join("\n");
-  return `${code}
+  return `
 
--- Press Run to check your answer. The checks below don't need changes.
+-- The lesson's checks, run after the learner's code.
 local passed = 0
 local function check(label: string, test: () -> boolean)
   local ok, result = pcall(test)
@@ -144,6 +159,8 @@ export function articleExamples(): PlaygroundExample[] {
     ...page.blocks.flatMap((block, index): PlaygroundExample[] =>
       block.code ? [{ id: codeBlockId(prefix, page.slug, index), title: page.title, flavor: block.code.flavor, code: block.code.code }] : []
     ),
-    ...(page.exercise ? [{ id: exerciseId(page.slug), title: `${page.title} exercise`, flavor: "luau" as const, code: exerciseSource(page.exercise) }] : [])
+    ...(page.exercise
+      ? [{ id: exerciseId(page.slug), title: `${page.title} exercise`, flavor: "luau" as const, code: page.exercise.starter, checks: exerciseChecks(page.exercise) }]
+      : [])
   ]);
 }

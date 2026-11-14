@@ -1,7 +1,7 @@
 // Guards for the article pages: enough text to answer the query they target,
 // search snippets that fit, and no links to pages that don't exist.
 import { describe, expect, it } from "vitest";
-import { type ArticlePage, articleHubs, guidePages, pagesWithCode } from "./articles";
+import { type ArticlePage, articleHubs, exerciseTask, guidePages, pagesWithCode } from "./articles";
 import { TOOL_PATHS, type ToolPage } from "./routes";
 
 /** Every piece of prose a page renders, including widgets' text; code and outputs aren't counted. */
@@ -82,5 +82,12 @@ describe("article pages", () => {
         if (block.quiz) expect(block.quiz.options[block.quiz.answer]).toBeDefined();
       }
     }
+  });
+
+  it("states each exercise's task in the comment that opens its starter", () => {
+    for (const page of articleHubs["learn-luau"].pages) {
+      expect(exerciseTask(page.exercise!).length, page.slug).toBeGreaterThan(40);
+    }
+    expect(exerciseTask({ starter: "--!strict\n-- Do this\n-- and that.\nlocal x = 1\n-- not this", solution: "", checks: [] })).toBe("Do this and that.");
   });
 });

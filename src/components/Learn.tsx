@@ -1,7 +1,7 @@
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Pause, Play, RotateCcw, Sparkles, X } from "lucide-react";
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
-import { ALL_PASSED, exerciseId, exerciseSource } from "../lib/articles";
-import type { ArticlePage, Lookup, Quiz, Trace, TraceValue } from "../lib/articleTypes";
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Code2, Pause, Play, RotateCcw, Sparkles, X } from "lucide-react";
+import { createContext, type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { ALL_PASSED, exerciseId, exerciseTask } from "../lib/articles";
+import type { ArticlePage, Exercise, Lookup, Quiz, Trace, TraceValue } from "../lib/articleTypes";
 import { type TraceFrame, traceStates } from "../lib/trace";
 import { Inline, LuaCode } from "./Code";
 import { trackEvent } from "../lib/telemetry";
@@ -423,50 +423,192 @@ export function LookupDemo({ lookup, id = "lookup" }: { lookup: Lookup; id?: str
 }
 
 // ---------------------------------------------------------------------------
-// The exercise: an embedded editor whose passing run completes the lesson
+// The lesson's editor: beside the lesson on wide screens, over it on phones
+// ---------------------------------------------------------------------------
+
+/** An example "Try it" sends to the lesson's editor. */
+export interface TryExample {
+  id: string;
+  /** The `/embed` hash that opens it. */
+  hash: string;
+}
+
+/** Set on lesson pages, where "Try it" opens an example in the editor beside the lesson. */
+export const TryItContext = createContext<((example: TryExample) => void) | null>(null);
+
+export interface WorkspaceView {
+  tab: "exercise" | "example";
+  /** Narrow screens: the editor covers the lesson. */
+  open: boolean;
+}
+
+/** Wide enough for the lesson and its editor side by side. Keep in step with styles.css. */
+const SIDE_BY_SIDE_QUERY = "(min-width: 1100px)";
+
+interface LessonWorkspaceProps {
+  page: ArticlePage & { exercise: Exercise };
+  example: TryExample | null;
+  view: WorkspaceView;
+  onView: (view: WorkspaceView) => void;
+  /** What the exercise printed on its latest run; null after Start over. */
+  onOutput: (output: string | null) => void;
+}
+
+export function LessonWorkspace({ page, example, view, onView, onOutput }: LessonWorkspaceProps) {
+  const exerciseFrame = useRef<HTMLIFrameElement>(null);
+  const exampleFrame = useRef<HTMLIFrameElement>(null);
+  const results = useRef(new Set<string>());
+  const firstView = useRef(view);
+  const [live, setLive] = useState(false);
+  const [resets, setResets] = useState({ exercise: 0, example: 0 });
+
+  // Beside the lesson, the editor loads once the page has, so it never competes
+  // with the page's first paint. On a phone it waits until it's opened.
+  useEffect(() => {
+    if (view.open) return setLive(true);
+    if (!window.matchMedia?.(SIDE_BY_SIDE_QUERY).matches) return;
+    if (document.readyState === "complete") return setLive(true);
+    const start = () => setLive(true);
+    window.addEventListener("load", start, { once: true });
+    return () => window.removeEventListener("load", start);
+  }, [view.open]);
+
+  // Asked for, not on page load: the editor takes the keyboard.
+  useEffect(() => {
+    if (view !== firstView.current) (view.tab === "exercise" ? exerciseFrame : exampleFrame).current?.focus();
+  }, [view]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      // Only this page's own exercise embed, served from this origin, can complete the lesson.
+      if (event.origin !== window.location.origin || event.source !== exerciseFrame.current?.contentWindow) return;
+      const data: unknown = event.data;
+      if (typeof data !== "object" || data === null) return;
+      const { type, output } = data as { type?: unknown; output?: unknown };
+      if (type !== "weblua:run" || typeof output !== "string") return;
+      onOutput(output);
+      const passed = output.includes(ALL_PASSED);
+      const status = passed ? "passed" : "failed";
+      if (!results.current.has(status)) {
+        results.current.add(status);
+        trackEvent("exercise_result", { lesson: page.slug, status });
+        if (passed) markDone(page.slug);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [page.slug, onOutput]);
+
+  const startOver = () => {
+    if (!window.confirm("Start over? This puts the starting code back.")) return;
+    setResets((current) => ({ ...current, [view.tab]: current[view.tab] + 1 }));
+    if (view.tab === "exercise") onOutput(null);
+  };
+
+  return (
+    <>
+      <button className="button button-primary lesson-code-button" type="button" onClick={() => onView({ ...view, open: true })}>
+        <Code2 size={16} /> Code
+      </button>
+      <aside className={`lesson-workspace${view.open ? " is-open" : ""}`} aria-label="Editor">
+        <div className="lesson-workspace-bar">
+          <span className="output-tabs compact-tabs lesson-tabs" role="group" aria-label="Show in the editor">
+            <button type="button" aria-pressed={view.tab === "exercise"} onClick={() => onView({ ...view, tab: "exercise" })}>
+              Exercise
+            </button>
+            <button
+              type="button"
+              aria-pressed={view.tab === "example"}
+              disabled={!example}
+              title={example ? undefined : "Press Try it on an example to open it here"}
+              onClick={() => onView({ ...view, tab: "example" })}
+            >
+              Example
+            </button>
+          </span>
+          <button className="icon-button text-icon lesson-start-over" type="button" onClick={startOver} disabled={!live} title="Start over" aria-label="Start over">
+            <RotateCcw size={16} />
+          </button>
+          <button className="icon-button text-icon lesson-workspace-close" type="button" onClick={() => onView({ ...view, open: false })} title="Back to the lesson" aria-label="Back to the lesson">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="lesson-workspace-body">
+          {live ? (
+            <>
+              <iframe
+                ref={exerciseFrame}
+                key={`exercise-${resets.exercise}`}
+                src={`/embed#example=${encodeURIComponent(exerciseId(page.slug))}&lesson=1`}
+                title={`${page.title} exercise`}
+                hidden={view.tab !== "exercise"}
+              />
+              {example && (
+                <iframe
+                  ref={exampleFrame}
+                  key={`${example.id}-${resets.example}`}
+                  src={`/embed#${example.hash}&run=1&lesson=1`}
+                  title={`Editable example: ${example.id}`}
+                  hidden={view.tab !== "example"}
+                />
+              )}
+            </>
+          ) : (
+            <div className="lesson-workspace-preview">
+              <pre>
+                <code>
+                  <LuaCode code={page.exercise.starter} />
+                </code>
+              </pre>
+              <button className="button button-primary" type="button" onClick={() => setLive(true)}>
+                <Play size={15} /> Load the editor
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The exercise: the task and its checks, ticked off as the editor runs them
 // ---------------------------------------------------------------------------
 
 interface ExerciseCardProps {
   page: ArticlePage;
   next?: ArticlePage;
+  /** What the exercise printed on its latest run; null before the first. */
+  output: string | null;
+  onOpen: () => void;
 }
 
-export function ExerciseCard({ page, next }: ExerciseCardProps) {
-  const frame = useRef<HTMLIFrameElement>(null);
-  const results = useRef(new Set<string>());
+export function ExerciseCard({ page, next, output, onOpen }: ExerciseCardProps) {
   const done = useLessonsDone().includes(page.slug);
-
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      // Only this page's own embed, served from this origin, can complete the lesson.
-      if (event.origin !== window.location.origin || event.source !== frame.current?.contentWindow) return;
-      const data: unknown = event.data;
-      if (typeof data !== "object" || data === null) return;
-      const { type, output } = data as { type?: unknown; output?: unknown };
-      if (type === "weblua:run" && typeof output === "string") {
-        const passed = output.includes(ALL_PASSED);
-        const status = passed ? "passed" : "failed";
-        if (!results.current.has(status)) {
-          results.current.add(status);
-          trackEvent("exercise_result", { lesson: page.slug, status });
-          if (passed) markDone(page.slug);
-        }
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [page.slug]);
-
   if (!page.exercise) return null;
+  const printed = output?.split("\n");
   return (
     <section className={`exercise${done ? " is-done" : ""}`} id="exercise" data-read="exercise" aria-labelledby="exercise-title">
       <p className="exercise-kicker">Your turn</p>
       <h2 id="exercise-title">Exercise</h2>
-      <p>
-        Fill in the function in the editor, then press <strong>Run</strong>. The checks at the bottom of the file print ✓ for each
-        one your answer passes. Pass them all to complete the lesson; your progress stays in this browser.
-      </p>
-      <iframe ref={frame} src={`/embed#example=${encodeURIComponent(exerciseId(page.slug))}`} title={`${page.title} exercise`} loading="lazy" width="100%" height="540" />
+      <p className="exercise-task">{exerciseTask(page.exercise)}</p>
+      <ul className="exercise-checks" aria-label="Checks">
+        {page.exercise.checks.map(([label]) => {
+          const state = !printed ? "" : printed.includes(`✓ ${label}`) ? "pass" : "fail";
+          return (
+            <li className={state ? `exercise-check is-${state}` : "exercise-check"} key={label}>
+              <span className="exercise-check-mark" aria-hidden="true">
+                {state === "pass" ? <Check size={13} /> : state === "fail" ? <X size={13} /> : null}
+              </span>
+              <span>{label}</span>
+              {state && <span className="visually-hidden">{state === "pass" ? ", passed" : ", not passed yet"}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      <button className="button button-primary exercise-open" type="button" onClick={onOpen}>
+        <Code2 size={16} /> Write it in the editor
+      </button>
       <div className="exercise-status" aria-live="polite">
         {done ? (
           <>
@@ -485,7 +627,7 @@ export function ExerciseCard({ page, next }: ExerciseCardProps) {
             </span>
           </>
         ) : (
-          <span>Not passed yet. Run your code to check it.</span>
+          <span>Press Run in the editor to check your code. Pass every check to complete the lesson; your progress stays in this browser.</span>
         )}
       </div>
       <details className="exercise-solution" data-track="solution_reveal" data-track-block={page.slug}>
@@ -498,7 +640,7 @@ export function ExerciseCard({ page, next }: ExerciseCardProps) {
       </details>
       <noscript>
         <pre>
-          <code>{exerciseSource(page.exercise)}</code>
+          <code>{page.exercise.starter}</code>
         </pre>
       </noscript>
     </section>
