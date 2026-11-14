@@ -471,9 +471,9 @@ function CourseRail({ pages, current }: { pages: ArticlePage[]; current: number 
       <ol>
         {pages.map((page, index) => (
           <li key={page.slug} className={done.includes(page.slug) ? "is-done" : undefined}>
-            <a href={`/learn-luau/${page.slug}`} aria-current={index === current ? "page" : undefined}>
+            <a href={`/learn-luau/${page.slug}`} aria-current={index === current ? "page" : undefined} title={page.title}>
               <span className="course-dot">{done.includes(page.slug) ? <Check size={12} /> : index + 1}</span>
-              {page.title}
+              <span className="course-rail-name">{page.title}</span>
             </a>
           </li>
         ))}
@@ -519,7 +519,10 @@ function LessonPage({ hub, index }: { hub: ArticleHub; index: number }) {
                     <ul>
                       {page.outcomes.map((outcome) => (
                         <li key={outcome}>
-                          <Check size={15} aria-hidden="true" /> <Inline text={outcome} />
+                          <Check size={15} aria-hidden="true" />
+                          <span>
+                            <Inline text={outcome} />
+                          </span>
                         </li>
                       ))}
                     </ul>

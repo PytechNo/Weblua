@@ -4362,6 +4362,33 @@ body[data-about-dismissed] .playground-about {
   justify-content: center;
 }
 
+/* The lesson page is wider than the rest of the site, so its header and footer widen to the same edges. */
+.site:has(.page.lesson) .site-footer-inner {
+  width: min(1520px, 100%);
+}
+
+@media (min-width: 1100px) {
+  .site:has(.page.lesson) .nav-inner {
+    max-width: 1520px;
+    padding: 0 40px;
+  }
+
+  /* Beside the editor eight names don't fit in a row and a mouse can't swipe one, so the other
+     lessons keep only their number. The name stays for screen readers and as the link's tooltip. */
+  .course-rail a:not([aria-current="page"]) {
+    padding: 8px;
+  }
+
+  .course-rail a:not([aria-current="page"]) .course-rail-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
 .lesson-aside {
   padding: 18px 0 0;
 }

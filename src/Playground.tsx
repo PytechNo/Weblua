@@ -393,7 +393,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
   // Phones and embeds get the compact layout: one slim bar, everything else in a menu.
   // Below 640px it also shows one pane at a time, picked by phonePane.
   const compact = useMediaQuery(COMPACT_QUERY) || isEmbed;
-  const narrow = useMediaQuery(NARROW_QUERY);
+  // A lesson's editor is a tall column however wide the screen: side by side, the code gets half of it.
+  const narrow = useMediaQuery(NARROW_QUERY) || lesson;
   const coarse = useMediaQuery(COARSE_QUERY);
   const tall = useMediaQuery(TALL_QUERY);
   // Phones keep tabs even when tall: with the keyboard open, a stacked editor would be a sliver.
@@ -524,8 +525,9 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
 
   useEffect(() => {
     storeEditorOptions(editorOptions);
-    editorRef.current?.view?.dispatch({ effects: wrapCompartment.reconfigure(editorOptions.wrap ? EditorView.lineWrapping : []) });
-  }, [editorOptions]);
+    // A lesson's editor is a narrow column with no menu to turn wrapping on, so it always wraps.
+    editorRef.current?.view?.dispatch({ effects: wrapCompartment.reconfigure(lesson || editorOptions.wrap ? EditorView.lineWrapping : []) });
+  }, [editorOptions, lesson]);
 
   const activeCode = workspace.project.files[workspace.activeFile] ?? "";
   /** Hold back content whose size a pending restore would change. */
@@ -851,8 +853,8 @@ export default function Playground({ theme, onToggleTheme, isEmbed, tool }: Play
       luauIntelligence(() => ({ ...workspaceRef.current, typeMode: typeModeRef.current }))
     );
 
-    return [language, liveLinter, lintGutter(), selectionLayer, wrapCompartment.of(readEditorOptions().wrap ? EditorView.lineWrapping : [])];
-  }, []);
+    return [language, liveLinter, lintGutter(), selectionLayer, wrapCompartment.of(lesson || readEditorOptions().wrap ? EditorView.lineWrapping : [])];
+  }, [lesson]);
 
   // A stable lint source no longer re-runs just because the extension array
   // was rebuilt, so ask for a pass when the runtime, the open file, or the
